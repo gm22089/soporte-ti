@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Control Logístico y Soporte Técnico TI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col">
+
+  <!-- CONTENEDOR DE NOTIFICACIONES TOAST -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 max-w-md space-y-2"></div>
+
+  <!-- ==================================================================== -->
+  <!-- PANTALLA DE INICIO DE SESIÓN (ACCESO RESTRINGIDO AL PERSONAL)        -->
+  <!-- ==================================================================== -->
+  <div id="login-screen" class="fixed inset-0 z-50 bg-slate-950 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-800 overflow-hidden">
+      <div class="bg-slate-900 text-white p-6 text-center border-b border-slate-800">
+        <div class="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+          <i data-lucide="shield-check" class="w-8 h-8 text-white"></i>
+        </div>
+        <h2 class="text-xl font-bold tracking-tight">Acceso al Sistema TI</h2>
+        <p class="text-xs text-slate-400 mt-1">
+          Control Logístico y Taller de Soporte Técnico
+        </p>
+      </div>
+
+      <form id="form-login" class="p-6 space-y-4">
+        <div id="login-status-msg" class="text-xs text-center text-amber-700 bg-amber-50 border border-amber-200 py-2 px-3 rounded-lg">
+          Sincronizando usuarios con Firebase...
+        </div>
+
+        <div id="login-error" class="hidden text-xs font-semibold text-red-700 bg-red-50 border border-red-200 py-2.5 px-3 rounded-lg"></div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1.5">Nombre de usuario</label>
+          <div class="relative">
+            <i data-lucide="user" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+            <input type="text" id="login-username" required autocomplete="username" placeholder="Ej. rgarcia o admin" class="w-full pl-10 pr-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1.5">Contraseña</label>
+          <div class="relative">
+            <i data-lucide="lock" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+            <input type="password" id="login-password" required autocomplete="current-password" placeholder="••••••••" class="w-full pl-10 pr-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+        </div>
+
+        <button type="submit" id="btn-login-submit" disabled class="w-full py-3 px-4 rounded-xl text-sm font-bold bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white shadow-md transition">
+          Ingresar al Sistema
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- APLICACIÓN PRINCIPAL (VISIBLE SOLO TRAS INICIAR SESIÓN)              -->
+  <!-- ==================================================================== -->
+  <div id="app-shell" class="hidden flex-col min-h-screen">
+
+    <!-- ENCABEZADO INSTITUCIONAL -->
+    <header class="bg-slate-900 text-white shadow-lg border-b border-slate-800 sticky top-0 z-30">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="p-2.5 bg-blue-600 rounded-xl shadow-inner">
+              <i data-lucide="laptop" class="w-6 h-6 text-white"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h1 class="text-lg sm:text-xl font-bold tracking-tight">
+                  Control Logístico y Soporte Técnico TI
+                </h1>
+                <span id="db-status-badge" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Firestore en vivo
+                </span>
+              </div>
+              <p class="text-xs text-slate-300">
+                Recepción Logística, Taller de Reparación y Auditoría de Registros
+              </p>
+            </div>
+          </div>
+
+          <!-- Perfil de usuario logueado + Cerrar sesión -->
+          <div class="flex items-center gap-2.5 self-start md:self-auto bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700">
+            <div class="text-right">
+              <p id="header-user-name" class="text-xs font-bold text-white leading-tight">—</p>
+              <span id="header-user-role" class="inline-block text-[10px] font-extrabold uppercase tracking-wider px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300">—</span>
+            </div>
+            <button type="button" id="btn-logout" class="p-2 rounded-lg bg-slate-700 hover:bg-rose-600 text-slate-200 hover:text-white transition" title="Cerrar sesión">
+              <i data-lucide="log-out" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- NAVEGACIÓN PRINCIPAL POR PESTAÑAS -->
+        <nav class="mt-4 flex overflow-x-auto gap-1.5 pb-1 no-scrollbar">
+          <button type="button" data-tab="general" class="nav-tab-btn flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition bg-blue-600 text-white shadow-md">
+            <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+            Vista General (Panel Diario)
+            <span id="badge-nav-general" class="ml-1 px-2 py-0.5 text-xs rounded-full bg-slate-950/50 text-white">0</span>
+          </button>
+
+          <button type="button" data-tab="recepcion" class="nav-tab-btn flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition text-slate-300 hover:bg-slate-800 hover:text-white">
+            <i data-lucide="clipboard-list" class="w-4 h-4"></i>
+            Recepción de Equipos (Logística)
+          </button>
+
+          <button type="button" data-tab="soporte" class="nav-tab-btn flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition text-slate-300 hover:bg-slate-800 hover:text-white">
+            <i data-lucide="wrench" class="w-4 h-4"></i>
+            Soporte Técnico (Taller)
+            <span class="ml-1 flex items-center gap-1">
+              <span id="badge-nav-espera" class="hidden px-1.5 py-0.5 text-xs rounded-full bg-amber-500 text-slate-950 font-bold">0</span>
+              <span id="badge-nav-reparacion" class="hidden px-1.5 py-0.5 text-xs rounded-full bg-sky-400 text-slate-950 font-bold">0</span>
+            </span>
+          </button>
+
+          <button type="button" data-tab="historial" class="nav-tab-btn flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition text-slate-300 hover:bg-slate-800 hover:text-white">
+            <i data-lucide="history" class="w-4 h-4"></i>
+            Historial Global (Todas las fechas)
+            <span id="badge-nav-historial" class="ml-1 px-2 py-0.5 text-xs rounded-full bg-slate-950/50 text-slate-200">0</span>
+          </button>
+
+          <!-- PESTAÑA OCULTA EXCLUSIVA PARA ADMINISTRADORES -->
+          <button type="button" id="nav-tab-admin" data-tab="admin" class="hidden nav-tab-btn flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition text-amber-300 hover:bg-slate-800 border border-amber-500/30">
+            <i data-lucide="shield" class="w-4 h-4"></i>
+            Panel Admin (Usuarios y Auditoría)
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <!-- ALERTA DE ERROR DE CONEXIÓN -->
+    <div id="db-error-banner" class="hidden max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 mt-4">
+      <div class="bg-red-50 border border-red-300 text-red-800 px-4 py-3 rounded-xl flex items-center gap-3">
+        <i data-lucide="alert-circle" class="w-5 h-5 text-red-600 shrink-0"></i>
+        <p id="db-error-text" class="text-sm font-medium"></p>
+      </div>
+    </div>
+
+    <!-- BARRA DE CONTROL ESTRICTO POR DÍA (VISTA GENERAL Y SOPORTE TÉCNICO) -->
+    <section id="daily-control-bar" class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pt-6">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-5">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div class="flex items-center gap-2">
+              <div class="p-2 bg-blue-50 text-blue-700 rounded-lg border border-blue-100">
+                <i data-lucide="calendar" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Jornada Operativa</span>
+                  <span id="daily-tag-badge" class="px-2 py-0.5 rounded text-[10px] font-bold tracking-wide bg-blue-600 text-white">HOY</span>
+                </div>
+                <p id="daily-readable-date" class="text-sm sm:text-base font-bold text-slate-900 capitalize"></p>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-1.5 sm:ml-2">
+              <button type="button" id="btn-date-yesterday" class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100">Ayer</button>
+              <button type="button" id="btn-date-today" class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition bg-blue-600 text-white border-blue-600">Hoy</button>
+              <button type="button" id="btn-date-tomorrow" class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100">Mañana</button>
+              <input type="date" id="input-selected-date" aria-label="Seleccionar fecha específica" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+
+          <!-- Buscador exclusivo del día -->
+          <div class="w-full lg:w-96">
+            <div class="relative">
+              <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+              <input type="text" id="input-daily-search" placeholder="Buscar solo en esta fecha (Serie, NIE, CE...)" class="w-full pl-10 pr-9 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition" />
+              <button type="button" id="btn-clear-daily-search" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1" title="Limpiar búsqueda">
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-1 flex items-center justify-between px-1">
+              <span>Filtro aislado por fecha (sin cruce con otros días)</span>
+              <span id="daily-filter-count" class="font-semibold text-slate-700">0 de 0 registros</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 flex-1">
+
+      <!-- ================================================================ -->
+      <!-- VISTA 1: PANEL GENERAL DIARIO                                    -->
+      <!-- ================================================================ -->
+      <section id="view-general" class="space-y-6">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Total Recibidos</span>
+              <div class="p-2 bg-slate-100 rounded-lg text-slate-700"><i data-lucide="laptop" class="w-5 h-5"></i></div>
+            </div>
+            <p id="kpi-total" class="text-3xl font-extrabold text-slate-900 mt-2">0</p>
+            <p id="kpi-total-sub" class="text-xs text-slate-500 mt-1">Equipos ingresados</p>
+          </div>
+
+          <div class="bg-white rounded-2xl p-5 border-l-4 border-l-amber-500 border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold uppercase tracking-wider text-amber-700">En Espera</span>
+              <div class="p-2 bg-amber-50 rounded-lg text-amber-600"><i data-lucide="clock" class="w-5 h-5"></i></div>
+            </div>
+            <p id="kpi-espera" class="text-3xl font-extrabold text-amber-600 mt-2">0</p>
+            <p class="text-xs text-slate-500 mt-1">Pendientes de asignar técnico</p>
+          </div>
+
+          <div class="bg-white rounded-2xl p-5 border-l-4 border-l-blue-600 border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold uppercase tracking-wider text-blue-700">En Reparación</span>
+              <div class="p-2 bg-blue-50 rounded-lg text-blue-600"><i data-lucide="wrench" class="w-5 h-5"></i></div>
+            </div>
+            <p id="kpi-reparacion" class="text-3xl font-extrabold text-blue-600 mt-2">0</p>
+            <p class="text-xs text-slate-500 mt-1">Actualmente en mesa de taller</p>
+          </div>
+
+          <div class="bg-white rounded-2xl p-5 border-l-4 border-l-emerald-600 border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold uppercase tracking-wider text-emerald-700">Finalizados</span>
+              <div class="p-2 bg-emerald-50 rounded-lg text-emerald-600"><i data-lucide="check-circle-2" class="w-5 h-5"></i></div>
+            </div>
+            <p id="kpi-finalizados" class="text-3xl font-extrabold text-emerald-600 mt-2">0</p>
+            <p class="text-xs text-slate-500 mt-1">Procesos completados</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div class="bg-slate-900 text-white rounded-2xl p-5 shadow-sm flex items-center justify-between">
+            <div>
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Promedio Tiempo de Espera</span>
+              <p id="kpi-promedio-espera" class="text-3xl font-extrabold text-amber-400 mt-1">0 min</p>
+              <p class="text-xs text-slate-300 mt-1">Desde recepción hasta inicio de reparación</p>
+            </div>
+            <div class="p-3 bg-slate-800 rounded-xl border border-slate-700">
+              <i data-lucide="clock" class="w-7 h-7 text-amber-400"></i>
+            </div>
+          </div>
+
+          <div class="lg:col-span-2 bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-3">Desglose de Resoluciones Finalizadas</span>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                <div>
+                  <p class="text-xs font-semibold text-emerald-900">Reparación en sede</p>
+                  <p class="text-[11px] text-emerald-700">Taller local</p>
+                </div>
+                <span id="kpi-res-sede" class="text-2xl font-extrabold text-emerald-700">0</span>
+              </div>
+
+              <div class="p-3 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-between">
+                <div>
+                  <p class="text-xs font-semibold text-teal-900">Atención efectiva</p>
+                  <p class="text-[11px] text-teal-700">Solución rápida</p>
+                </div>
+                <span id="kpi-res-efectiva" class="text-2xl font-extrabold text-teal-700">0</span>
+              </div>
+
+              <div class="p-3 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-between">
+                <div>
+                  <p class="text-xs font-semibold text-purple-900">Enviar a Garantía</p>
+                  <p class="text-[11px] text-purple-700">Trámite externo</p>
+                </div>
+                <span id="kpi-res-garantia" class="text-2xl font-extrabold text-purple-700">0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabla del día -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-slate-50/70">
+            <div>
+              <h2 id="general-table-title" class="text-base font-bold text-slate-900">Listado General de Equipos</h2>
+              <p class="text-xs text-slate-500">Trazabilidad completa de recepción logística, soporte técnico y correcciones</p>
+            </div>
+            <button type="button" id="btn-new-reception-date" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition self-start sm:self-auto">
+              <i data-lucide="plus" class="w-4 h-4"></i>
+              Nueva Recepción en esta fecha
+            </button>
+          </div>
+
+          <div id="general-empty-state" class="hidden p-12 text-center">
+            <i data-lucide="laptop" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
+            <h3 id="general-empty-title" class="text-base font-bold text-slate-700">Sin registros</h3>
+            <p id="general-empty-desc" class="text-sm text-slate-500 mt-1 max-w-md mx-auto"></p>
+          </div>
+
+          <div id="general-table-wrapper" class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-900 text-slate-200 text-[11px] uppercase tracking-wider">
+                  <th class="py-3 px-3.5 font-semibold">Hora Rec.</th>
+                  <th class="py-3 px-3.5 font-semibold">Serie Equipo</th>
+                  <th class="py-3 px-3.5 font-semibold">Centro Educativo</th>
+                  <th class="py-3 px-3.5 font-semibold">Beneficiario / Grado</th>
+                  <th class="py-3 px-3.5 font-semibold">Responsable / Cel</th>
+                  <th class="py-3 px-3.5 font-semibold">Daño / Cargador</th>
+                  <th class="py-3 px-3.5 font-semibold">Logística (Rec / Ticket)</th>
+                  <th class="py-3 px-3.5 font-semibold">Soporte (Téc / Horas)</th>
+                  <th class="py-3 px-3.5 font-semibold">Espera</th>
+                  <th class="py-3 px-3.5 font-semibold">Estado / Resolución</th>
+                  <th class="py-3 px-3.5 font-semibold text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="general-table-body" class="divide-y divide-slate-200 text-xs"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <!-- VISTA 2: PANEL DE RECEPCIÓN DE EQUIPOS (LOGÍSTICA)               -->
+      <!-- ================================================================ -->
+      <section id="view-recepcion" class="hidden max-w-4xl mx-auto">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div class="bg-slate-900 text-white px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h2 class="text-lg font-bold flex items-center gap-2">
+                <i data-lucide="clipboard-list" class="w-5 h-5 text-blue-400"></i>
+                Formulario de Recepción de Equipo (Logística)
+              </h2>
+              <p class="text-xs text-slate-300 mt-0.5">
+                Registra el ingreso de PC o Tablet. Compatible con lector láser de código de barras.
+              </p>
+            </div>
+            <button type="button" id="btn-focus-scanner" class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow transition self-start sm:self-auto">
+              <i data-lucide="scan-barcode" class="w-4 h-4"></i>
+              Enfocar Escáner
+            </button>
+          </div>
+
+          <form id="form-recepcion" class="p-6 space-y-7">
+            <div class="bg-slate-50 p-4 sm:p-5 rounded-xl border border-slate-200 space-y-4">
+              <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                <i data-lucide="calendar" class="w-4 h-4 text-blue-600"></i>
+                1. Control de Fecha, Hora y Personal que Recepciona
+              </h3>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1.5">Fecha de Recepción *</label>
+                  <div class="flex items-center gap-2">
+                    <input type="date" id="rec-fecha" required class="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <button type="button" id="btn-rec-hoy" class="px-2.5 py-2 text-xs font-semibold bg-blue-100 text-blue-800 rounded-lg hover:bg-blue-200 transition">Hoy</button>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1.5">Hora que se recepcionó *</label>
+                  <div class="flex items-center gap-2">
+                    <input type="time" step="1" id="rec-hora" required class="flex-1 px-3 py-2 text-sm font-mono bg-white border border-slate-300 rounded-lg font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <button type="button" id="btn-rec-ahora" class="px-2.5 py-2 text-xs font-semibold bg-slate-200 text-slate-800 rounded-lg hover:bg-slate-300 transition">Ahora</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1.5">Técnico que recepcionó el caso *</label>
+                  <select id="rec-tecnico-recepcion" required class="w-full px-3 py-2.5 text-sm bg-white border border-slate-300 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"></select>
+                </div>
+
+                <div>
+                  <div class="flex items-center justify-between mb-1.5">
+                    <label class="block text-xs font-bold text-slate-700">Técnico que creó ticket *</label>
+                    <button type="button" id="btn-same-tech" class="text-[11px] font-semibold text-blue-600 hover:underline">Mismo que recepcionó</button>
+                  </div>
+                  <select id="rec-tecnico-ticket" required class="w-full px-3 py-2.5 text-sm bg-white border border-slate-300 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"></select>
+                </div>
+              </div>
+            </div>
+
+            <!-- ESCÁNER -->
+            <div class="bg-blue-50/60 p-4 sm:p-5 rounded-xl border border-blue-200 space-y-4">
+              <div class="flex items-center justify-between">
+                <h3 class="text-xs font-extrabold uppercase tracking-wider text-blue-900 flex items-center gap-2">
+                  <i data-lucide="scan-barcode" class="w-4 h-4 text-blue-600"></i>
+                  2. Identificación del Equipo (Escáner Láser / Manual)
+                </h3>
+                <span id="scan-flash-badge" class="hidden inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-600 text-white animate-pulse">
+                  <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>
+                  ¡Serie capturada!
+                </span>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div class="md:col-span-2">
+                  <label class="block text-xs font-bold text-slate-800 mb-1.5">Serie del equipo * (Dispara el escáner aquí o escríbela)</label>
+                  <div class="relative">
+                    <i data-lucide="scan-barcode" class="w-5 h-5 text-blue-600 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                    <input type="text" id="rec-serie" required placeholder="Ej. 5CD1234XYZ — Presiona Enter al escanear" class="w-full pl-11 pr-4 py-3 text-base font-mono font-bold bg-white border-2 border-blue-300 rounded-xl uppercase transition focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-500/15" />
+                  </div>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-bold text-slate-800 mb-1.5">¿Trae cargador? *</label>
+                  <div class="grid grid-cols-2 gap-2">
+                    <button type="button" id="btn-cargador-si" class="py-2.5 px-3 rounded-xl text-sm font-bold border-2 flex items-center justify-center gap-1.5 transition bg-emerald-600 text-white border-emerald-600 shadow-sm">
+                      <i data-lucide="plug" class="w-4 h-4"></i> Sí
+                    </button>
+                    <button type="button" id="btn-cargador-no" class="py-2.5 px-3 rounded-xl text-sm font-bold border-2 flex items-center justify-center gap-1.5 transition bg-white text-slate-600 border-slate-300 hover:bg-slate-50">
+                      <i data-lucide="x" class="w-4 h-4"></i> No
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- DATOS DEL CE Y BENEFICIARIO -->
+            <div class="space-y-4">
+              <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-2 border-b border-slate-200 pb-2">
+                <i data-lucide="school" class="w-4 h-4 text-blue-600"></i>
+                3. Datos del Centro Educativo, Beneficiario y Responsable
+              </h3>
+
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <div class="flex items-center justify-between mb-1.5">
+                    <label class="block text-xs font-bold text-slate-700">Código del CE (5 dígitos) *</label>
+                    <span id="ce-digits-counter" class="text-[11px] font-mono font-bold text-slate-400">0/5</span>
+                  </div>
+                  <input type="text" id="rec-codigo-ce" required maxlength="5" inputmode="numeric" placeholder="Ej. 11452" class="w-full px-3.5 py-2.5 text-sm font-mono font-bold bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+
+                <div class="sm:col-span-2">
+                  <label class="block text-xs font-bold text-slate-700 mb-1.5">Nombre del Centro Educativo (CE) *</label>
+                  <input type="text" id="rec-nombre-ce" required placeholder="Ej. Complejo Educativo Profesor..." class="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+
+              <div class="pt-1">
+                <label class="block text-xs font-bold text-slate-700 mb-1.5">Tipo de Beneficiario *</label>
+                <div class="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200">
+                  <button type="button" id="btn-tipo-estudiante" class="px-4 py-2 rounded-lg text-xs font-bold transition bg-slate-900 text-white shadow">Estudiante (NIE)</button>
+                  <button type="button" id="btn-tipo-docente" class="px-4 py-2 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900">Docente (DUI)</button>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label id="label-id-beneficiario" class="block text-xs font-bold text-slate-700 mb-1.5">NIE del estudiante *</label>
+                  <input type="text" id="rec-id-beneficiario" required placeholder="Ej. 19845621" class="w-full px-3.5 py-2.5 text-sm font-mono bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+
+                <div>
+                  <label id="label-nombre-beneficiario" class="block text-xs font-bold text-slate-700 mb-1.5">Nombre del estudiante *</label>
+                  <input type="text" id="rec-nombre-beneficiario" required placeholder="Nombre completo" class="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1.5">Grado del estudiante *</label>
+                  <select id="rec-grado" required class="w-full px-3 py-2.5 text-sm bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"></select>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1.5">Número de celular *</label>
+                  <input type="tel" id="rec-celular" required placeholder="Ej. 7890-1234" class="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1.5">DUI del responsable *</label>
+                  <input type="text" id="rec-dui-responsable" required placeholder="Ej. 04567891-2" class="w-full px-3.5 py-2.5 text-sm font-mono bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1.5">Nombre del responsable *</label>
+                  <input type="text" id="rec-nombre-responsable" required placeholder="Padre, madre o encargado" class="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+            </div>
+
+            <!-- DAÑO REPORTADO -->
+            <div class="space-y-3">
+              <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-2 border-b border-slate-200 pb-2">
+                <i data-lucide="alert-circle" class="w-4 h-4 text-amber-600"></i>
+                4. Daño Reportado del Equipo *
+              </h3>
+              <div>
+                <span class="text-xs text-slate-500 block mb-2">Selección rápida de fallas frecuentes:</span>
+                <div id="damage-chips-container" class="flex flex-wrap gap-2"></div>
+              </div>
+              <textarea id="rec-dano" rows="3" required placeholder="Describe el problema técnico que presenta la PC o Tablet..." class="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+            </div>
+
+            <div class="pt-2 flex justify-end border-t border-slate-200">
+              <button type="submit" id="btn-submit-recepcion" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-sm font-bold bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white shadow-md transition">
+                <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+                Guardar Recepción de Equipo
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <!-- VISTA 3: SOPORTE TÉCNICO (TALLER Y CONTROL DE TIEMPOS)           -->
+      <!-- ================================================================ -->
+      <section id="view-soporte" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        <div class="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
+          <div class="bg-amber-50 border-b border-amber-200 px-4 py-3.5 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i data-lucide="clock" class="w-5 h-5 text-amber-600"></i>
+              <h3 class="font-bold text-amber-950 text-sm">En Espera de Técnico</h3>
+            </div>
+            <span id="count-col-espera" class="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-amber-500 text-slate-950">0</span>
+          </div>
+          <div id="list-col-espera" class="p-4 space-y-3.5"></div>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-blue-200 shadow-sm overflow-hidden">
+          <div class="bg-blue-50 border-b border-blue-200 px-4 py-3.5 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i data-lucide="wrench" class="w-5 h-5 text-blue-600"></i>
+              <h3 class="font-bold text-blue-950 text-sm">En Reparación (Taller)</h3>
+            </div>
+            <span id="count-col-reparacion" class="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-blue-600 text-white">0</span>
+          </div>
+          <div id="list-col-reparacion" class="p-4 space-y-3.5"></div>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-emerald-200 shadow-sm overflow-hidden">
+          <div class="bg-emerald-50 border-b border-emerald-200 px-4 py-3.5 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-600"></i>
+              <h3 class="font-bold text-emerald-950 text-sm">Reparaciones Finalizadas</h3>
+            </div>
+            <span id="count-col-finalizados" class="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-600 text-white">0</span>
+          </div>
+          <div id="list-col-finalizados" class="p-4 space-y-3.5"></div>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <!-- VISTA 4: HISTORIAL GLOBAL (TODAS LAS FECHAS)                     -->
+      <!-- ================================================================ -->
+      <section id="view-historial" class="hidden space-y-5">
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+            <div>
+              <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                <i data-lucide="history" class="w-5 h-5 text-blue-600"></i>
+                Historial Global Multi-Fecha
+              </h2>
+              <p class="text-xs text-slate-500">Consulta consolidada de todas las fechas registradas.</p>
+            </div>
+            <button type="button" id="btn-export-csv" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition self-start md:self-auto">
+              <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+              Exportar a Excel / CSV (<span id="export-csv-count">0</span>)
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <input type="text" id="global-search" placeholder="Serie, NIE, DUI, CE o Técnico..." class="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <input type="date" id="global-date" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <select id="global-status" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="TODOS">Todos los estados</option>
+              <option value="En espera">En espera</option>
+              <option value="En reparación">En reparación</option>
+              <option value="Finalizado">Finalizado</option>
+            </select>
+            <div class="flex gap-2">
+              <select id="global-resolution" class="flex-1 px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="TODAS">Todas las resoluciones</option>
+                <option value="Reparación en sede">Reparación en sede</option>
+                <option value="Atención efectiva">Atención efectiva</option>
+                <option value="Enviar a Garantía">Enviar a Garantía</option>
+              </select>
+              <button type="button" id="btn-clear-global-filters" class="hidden px-2.5 py-2 text-xs font-semibold bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl" title="Limpiar filtros">
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-900 text-slate-200 text-[11px] uppercase tracking-wider">
+                  <th class="py-3 px-3.5 font-semibold">Fecha</th>
+                  <th class="py-3 px-3.5 font-semibold">Hora Rec.</th>
+                  <th class="py-3 px-3.5 font-semibold">Serie</th>
+                  <th class="py-3 px-3.5 font-semibold">Centro Educativo</th>
+                  <th class="py-3 px-3.5 font-semibold">Beneficiario</th>
+                  <th class="py-3 px-3.5 font-semibold">Recepcionó / Ticket</th>
+                  <th class="py-3 px-3.5 font-semibold">Técnico Reparador</th>
+                  <th class="py-3 px-3.5 font-semibold">Estado</th>
+                  <th class="py-3 px-3.5 font-semibold">Resolución</th>
+                  <th class="py-3 px-3.5 font-semibold text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="global-table-body" class="divide-y divide-slate-200 text-xs"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <!-- VISTA 5: PANEL ADMINISTRACIÓN (OCULTO - SOLO ROL ADMIN)          -->
+      <!-- ================================================================ -->
+      <section id="view-admin" class="hidden space-y-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          <!-- Formulario Crear / Editar Personal -->
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="bg-slate-900 text-white px-5 py-4">
+              <h2 id="admin-form-title" class="text-base font-bold flex items-center gap-2">
+                <i data-lucide="user-plus" class="w-5 h-5 text-amber-400"></i>
+                Registrar / Editar Personal
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">Asigna rol, usuario y contraseña de acceso</p>
+            </div>
+
+            <form id="form-admin-user" class="p-5 space-y-4">
+              <input type="hidden" id="admin-user-id" />
+
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Nombre completo *</label>
+                <input type="text" id="admin-user-nombre" required placeholder="Ej. Roberto Soriano" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Rol en el sistema *</label>
+                <select id="admin-user-rol" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="ADMIN">ADMIN (Control total y correcciones)</option>
+                  <option value="LOGISTICA">LOGÍSTICA (Recepción y tickets)</option>
+                  <option value="TECNICO">TÉCNICO (Taller de reparación)</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Nombre de usuario (Login) *</label>
+                <input type="text" id="admin-user-username" required placeholder="Ej. rsoriano" class="w-full px-3 py-2 text-sm font-mono border border-slate-300 rounded-xl lowercase focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Contraseña de acceso *</label>
+                <input type="text" id="admin-user-password" required placeholder="Ej. Clave2026" class="w-full px-3 py-2 text-sm font-mono border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+
+              <div class="flex items-center gap-2 pt-2">
+                <button type="submit" id="btn-save-admin-user" class="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow">
+                  Guardar Usuario
+                </button>
+                <button type="button" id="btn-cancel-edit-user" class="hidden py-2.5 px-3 rounded-xl text-xs font-semibold bg-slate-200 hover:bg-slate-300 text-slate-700">
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Listado de Personal Registrado -->
+          <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+              <div>
+                <h3 class="text-base font-bold text-slate-900">Usuarios y Permisos en Firestore</h3>
+                <p class="text-xs text-slate-500">Solo el personal listado aquí puede iniciar sesión y aparecer en los formularios</p>
+              </div>
+              <span id="admin-users-count" class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-900 text-white">0</span>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="bg-slate-900 text-slate-200 text-[11px] uppercase tracking-wider">
+                    <th class="py-3 px-4 font-semibold">Nombre</th>
+                    <th class="py-3 px-4 font-semibold">Rol</th>
+                    <th class="py-3 px-4 font-semibold">Usuario</th>
+                    <th class="py-3 px-4 font-semibold">Contraseña</th>
+                    <th class="py-3 px-4 font-semibold text-right">Gestión</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-users-tbody" class="divide-y divide-slate-200 text-xs"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bitácora de Correcciones Realizadas por Admins -->
+        <div class="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
+          <div class="px-5 py-4 border-b border-amber-200 bg-amber-50/70">
+            <h3 class="text-base font-bold text-amber-950 flex items-center gap-2">
+              <i data-lucide="file-warning" class="w-5 h-5 text-amber-600"></i>
+              Bitácora de Registros Corregidos por Administración
+            </h3>
+            <p class="text-xs text-amber-800">
+              Historial permanente de quién creó originalmente el registro con error y qué administrador aplicó la corrección.
+            </p>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-900 text-slate-200 text-[11px] uppercase tracking-wider">
+                  <th class="py-3 px-4 font-semibold">Fecha Reg.</th>
+                  <th class="py-3 px-4 font-semibold">Serie Equipo</th>
+                  <th class="py-3 px-4 font-semibold">Responsable Original (Quien cometió fallo)</th>
+                  <th class="py-3 px-4 font-semibold">Admin que corrigió</th>
+                  <th class="py-3 px-4 font-semibold">Motivo / Detalle</th>
+                  <th class="py-3 px-4 font-semibold text-right">Ver Ficha</th>
+                </tr>
+              </thead>
+              <tbody id="admin-audit-tbody" class="divide-y divide-slate-200 text-xs"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- MODAL 1: AGARRAR EQUIPO PARA REPARAR                                 -->
+  <!-- ==================================================================== -->
+  <div id="modal-grab" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="bg-blue-900 text-white px-5 py-4 flex items-center justify-between">
+        <h3 class="font-bold text-base flex items-center gap-2"><i data-lucide="wrench" class="w-5 h-5 text-sky-300"></i> Asignar Equipo a Reparación</h3>
+        <button type="button" id="btn-cancel-grab" class="text-slate-300 hover:text-white p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="p-5 space-y-4">
+        <div id="grab-info-box" class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs space-y-1"></div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1.5">Selecciona el Técnico que realizará la reparación *</label>
+          <select id="grab-tech-select" class="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"></select>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" id="btn-close-grab" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancelar</button>
+          <button type="button" id="btn-confirm-grab" class="px-5 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow">Confirmar e Iniciar Reparación</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- MODAL 2: FINALIZAR REPARACIÓN                                        -->
+  <!-- ==================================================================== -->
+  <div id="modal-finish" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="bg-emerald-900 text-white px-5 py-4 flex items-center justify-between">
+        <h3 class="font-bold text-base flex items-center gap-2"><i data-lucide="check-square" class="w-5 h-5 text-emerald-300"></i> Finalizar Reparación y Cerrar Proceso</h3>
+        <button type="button" id="btn-cancel-finish" class="text-slate-300 hover:text-white p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="p-5 space-y-4">
+        <div id="finish-info-box" class="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs flex items-center justify-between"></div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-2">Selecciona el resultado de la atención *</label>
+          <div id="finish-resolutions-container" class="space-y-2.5"></div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1.5">Nota técnica o detalle de solución (opcional)</label>
+          <textarea id="finish-nota" rows="2" placeholder="Ej. Se reinstaló imagen del sistema..." class="w-full px-3.5 py-2 text-xs bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" id="btn-close-finish" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancelar</button>
+          <button type="button" id="btn-confirm-finish" class="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow">Confirmar Finalización</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- MODAL 3: FICHA DE DETALLE COMPLETO                                   -->
+  <!-- ==================================================================== -->
+  <div id="modal-detail" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
+      <div class="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
+        <div>
+          <span class="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Ficha Técnica, Logística y Auditoría</span>
+          <h3 id="detail-serie-title" class="font-mono font-extrabold text-lg text-white"></h3>
+        </div>
+        <button type="button" id="btn-close-detail" class="text-slate-300 hover:text-white p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div id="detail-content" class="p-6 overflow-y-auto space-y-5 text-xs"></div>
+      <div class="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex justify-end">
+        <button type="button" id="btn-close-detail-footer" class="px-5 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800">Cerrar Ficha</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- MODAL 4: CONFIRMAR ELIMINACIÓN (SOLO ADMIN)                          -->
+  <!-- ==================================================================== -->
+  <div id="modal-delete" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 p-5 space-y-4">
+      <div class="flex items-center gap-3 text-red-700">
+        <div class="p-2.5 bg-red-100 rounded-xl"><i data-lucide="trash-2" class="w-6 h-6 text-red-600"></i></div>
+        <div>
+          <h3 class="font-bold text-base text-slate-900">¿Eliminar este registro?</h3>
+          <p class="text-xs text-slate-500">Acción exclusiva de Administrador.</p>
+        </div>
+      </div>
+      <p id="delete-info-text" class="text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-200"></p>
+      <div class="flex justify-end gap-2">
+        <button type="button" id="btn-cancel-delete" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancelar</button>
+        <button type="button" id="btn-confirm-delete" class="px-4 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white">Sí, eliminar registro</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- MODAL 5: CORREGIR / EDITAR REGISTRO (EXCLUSIVO ADMIN CON AUDITORÍA)  -->
+  <!-- ==================================================================== -->
+  <div id="modal-edit-record" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col">
+      <div class="bg-amber-600 text-white px-6 py-4 flex items-center justify-between">
+        <div>
+          <span class="text-[11px] uppercase tracking-wider font-extrabold text-amber-100">Modo Corrección Administrativa</span>
+          <h3 class="font-bold text-base">Editar Registro y Guardar Constancia de Auditoría</h3>
+        </div>
+        <button type="button" id="btn-close-edit-record" class="text-white/80 hover:text-white p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <form id="form-edit-record" class="p-6 overflow-y-auto space-y-4 text-xs">
+        <input type="hidden" id="edit-rec-id" />
+
+        <div class="bg-amber-50 border border-amber-200 p-3 rounded-xl text-amber-950">
+          <strong>Nota de auditoría:</strong> Los datos originales de quien creó o atendió el registro quedan respaldados en el historial interno para dejar constancia del fallo corregido.
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Fecha</label>
+            <input type="date" id="edit-rec-fecha" required class="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono" />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Serie del equipo</label>
+            <input type="text" id="edit-rec-serie" required class="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono font-bold uppercase" />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">¿Trae cargador?</label>
+            <select id="edit-rec-cargador" class="w-full px-3 py-2 border border-slate-300 rounded-lg">
+              <option value="true">Sí incluye cargador</option>
+              <option value="false">No trae cargador</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Código CE (5 dígitos)</label>
+            <input type="text" id="edit-rec-codigo-ce" maxlength="5" required class="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono" />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block font-bold text-slate-700 mb-1">Nombre del Centro Educativo</label>
+            <input type="text" id="edit-rec-nombre-ce" required class="w-full px-3 py-2 border border-slate-300 rounded-lg" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Tipo Beneficiario</label>
+            <select id="edit-rec-tipo-ben" class="w-full px-3 py-2 border border-slate-300 rounded-lg">
+              <option value="Estudiante">Estudiante</option>
+              <option value="Docente">Docente</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">NIE / DUI Beneficiario</label>
+            <input type="text" id="edit-rec-id-ben" required class="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono" />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Nombre Beneficiario</label>
+            <input type="text" id="edit-rec-nombre-ben" required class="w-full px-3 py-2 border border-slate-300 rounded-lg" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Grado</label>
+            <select id="edit-rec-grado" class="w-full px-3 py-2 border border-slate-300 rounded-lg"></select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Celular</label>
+            <input type="text" id="edit-rec-celular" class="w-full px-3 py-2 border border-slate-300 rounded-lg" />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">DUI Responsable</label>
+            <input type="text" id="edit-rec-dui-resp" class="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono" />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Nombre Responsable</label>
+            <input type="text" id="edit-rec-nombre-resp" class="w-full px-3 py-2 border border-slate-300 rounded-lg" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Daño Reportado</label>
+          <input type="text" id="edit-rec-dano" required class="w-full px-3 py-2 border border-slate-300 rounded-lg" />
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Recepcionó</label>
+            <select id="edit-rec-tec-rec" class="w-full px-3 py-2 border border-slate-300 rounded-lg"></select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Creó Ticket</label>
+            <select id="edit-rec-tec-tkt" class="w-full px-3 py-2 border border-slate-300 rounded-lg"></select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Técnico Reparador</label>
+            <select id="edit-rec-tec-rep" class="w-full px-3 py-2 border border-slate-300 rounded-lg"></select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Estado</label>
+            <select id="edit-rec-estado" class="w-full px-3 py-2 border border-slate-300 rounded-lg">
+              <option value="En espera">En espera</option>
+              <option value="En reparación">En reparación</option>
+              <option value="Finalizado">Finalizado</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Resolución</label>
+            <select id="edit-rec-resolucion" class="w-full px-3 py-2 border border-slate-300 rounded-lg">
+              <option value="">Pendiente</option>
+              <option value="Reparación en sede">Reparación en sede</option>
+              <option value="Atención efectiva">Atención efectiva</option>
+              <option value="Enviar a Garantía">Enviar a Garantía</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-slate-200">
+          <label class="block font-extrabold text-amber-800 mb-1">
+            Motivo de la corrección (Obligatorio para auditoría) *
+          </label>
+          <input type="text" id="edit-rec-motivo" required placeholder="Ej. Se corrigió dígito mal escrito en la serie / NIE equivocado" class="w-full px-3.5 py-2.5 border-2 border-amber-300 bg-amber-50/40 rounded-xl focus:outline-none focus:border-amber-600" />
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" id="btn-cancel-edit-record" class="px-4 py-2 rounded-xl font-semibold text-slate-600 hover:bg-slate-100">Cancelar</button>
+          <button type="submit" class="px-5 py-2.5 rounded-xl font-bold bg-amber-600 hover:bg-amber-700 text-white shadow">
+            Guardar Corrección y Registrar Auditoría
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
