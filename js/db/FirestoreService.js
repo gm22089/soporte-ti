@@ -5,7 +5,6 @@ import {
   updateDoc,
   deleteDoc,
   doc,
-  getDocs,
   onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { auth, db, COLLECTIONS } from "../config/firebaseConfig.js";
@@ -15,6 +14,7 @@ export class FirestoreService {
   constructor() {
     this.equiposCol = collection(db, COLLECTIONS.EQUIPOS);
     this.usuariosCol = collection(db, COLLECTIONS.USUARIOS);
+    this.seededChecked = false;
   }
 
   async initAuth(onReady, onError) {
@@ -26,33 +26,26 @@ export class FirestoreService {
       return;
     }
 
-    onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        await this.seedInitialUsersIfEmpty();
-        onReady(user);
-      }
+    onAuthStateChanged(auth, (user) => {
+      if (user) onReady(user);
     });
   }
 
-  async seedInitialUsersIfEmpty() {
-    try {
-      const snap = await getDocs(this.usuariosCol);
-      if (snap.empty) {
+  // --- USUARIOS DEL SISTEMA (CON CACHÉ PERSISTENTE) ---
+  subscribeUsers(onData) {
+    return onSnapshot(this.usuariosCol, async (snapshot) => {
+      // Solo crea los usuarios iniciales si el servidor confirma que la colección está vacía
+      if (snapshot.empty && !snapshot.metadata.fromCache && !this.seededChecked) {
+        this.seededChecked = true;
         for (const u of USUARIOS_INICIALES) {
           await addDoc(this.usuariosCol, {
             ...u,
             createdAt: Date.now()
           });
         }
+        return;
       }
-    } catch (err) {
-      console.error("Error inicializando usuarios:", err);
-    }
-  }
 
-  // --- USUARIOS DEL SISTEMA ---
-  subscribeUsers(onData) {
-    return onSnapshot(this.usuariosCol, (snapshot) => {
       const users = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
       onData(users);
     });
@@ -75,7 +68,7 @@ export class FirestoreService {
     return await deleteDoc(docRef);
   }
 
-  // --- REGISTROS DE EQUIPOS ---
+  // --- REGISTROS DE EQUIPOS (SOLO TRAE NUEVOS O MODIFICADOS) ---
   subscribeRecords(onData, onError) {
     return onSnapshot(
       this.equiposCol,
