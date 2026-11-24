@@ -36,6 +36,16 @@ class SoporteTIApp {
     this.selectedResolution = "Reparación en sede";
   }
 
+  // Helper seguro: nunca lanza TypeError si un elemento aún no existe en el DOM
+  bind(id, event, handler) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener(event, handler);
+    } else {
+      console.warn(`Elemento no encontrado en DOM: #${id}`);
+    }
+  }
+
   async init() {
     await this.loadBaseViews();
     this.initStaticOptions();
@@ -56,8 +66,10 @@ class SoporteTIApp {
     await Promise.all(
       partials.map(async ({ id, url }) => {
         const res = await fetch(url);
-        if (!res.ok) throw new Error(`No se pudo cargar ${url}`);
-        document.getElementById(id).innerHTML = await res.text();
+        if (!res.ok) throw new Error(`No se pudo cargar ${url} (${res.status})`);
+        const html = await res.text();
+        const container = document.getElementById(id);
+        if (container) container.innerHTML = html;
       })
     );
 
@@ -85,14 +97,18 @@ class SoporteTIApp {
     fillSelect("rec-grado", GRADOS_ESCOLARES);
     fillSelect("edit-rec-grado", GRADOS_ESCOLARES);
 
-    document.getElementById("rec-fecha").value = getLocalDateString(0);
-    document.getElementById("rec-hora").value = getCurrentTimeString();
+    const recFecha = document.getElementById("rec-fecha");
+    const recHora = document.getElementById("rec-hora");
+    if (recFecha) recFecha.value = getLocalDateString(0);
+    if (recHora) recHora.value = getCurrentTimeString();
 
     const chipsContainer = document.getElementById("damage-chips-container");
-    chipsContainer.innerHTML = FALLAS_FRECUENTES.map(
-      (falla) =>
-        `<button type="button" data-falla="${falla}" class="damage-chip px-3 py-1.5 rounded-lg text-xs font-semibold border bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100 transition">+ ${falla}</button>`
-    ).join("");
+    if (chipsContainer) {
+      chipsContainer.innerHTML = FALLAS_FRECUENTES.map(
+        (falla) =>
+          `<button type="button" data-falla="${falla}" class="damage-chip px-3 py-1.5 rounded-lg text-xs font-semibold border bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100 transition">+ ${falla}</button>`
+      ).join("");
+    }
   }
 
   syncPersonnelSelects() {
@@ -104,21 +120,25 @@ class SoporteTIApp {
       return emptyOpt + nombres.map((n) => `<option value="${n}">${n}</option>`).join("");
     };
 
-    // En recepción: el que recepciona queda fijo al usuario con sesión activa
-    if (this.currentUser) {
-      document.getElementById("rec-tecnico-recepcion").value = this.currentUser.nombre;
+    const recInput = document.getElementById("rec-tecnico-recepcion");
+    if (this.currentUser && recInput) {
+      recInput.value = this.currentUser.nombre;
     }
 
     const ticketSelect = document.getElementById("rec-tecnico-ticket");
-    ticketSelect.innerHTML = buildOptions();
-    if (this.currentUser && nombres.includes(this.currentUser.nombre)) {
-      ticketSelect.value = this.currentUser.nombre;
+    if (ticketSelect) {
+      ticketSelect.innerHTML = buildOptions();
+      if (this.currentUser && nombres.includes(this.currentUser.nombre)) {
+        ticketSelect.value = this.currentUser.nombre;
+      }
     }
 
-    // Selectores exclusivos del modal de corrección de Admin
-    document.getElementById("edit-rec-tec-rec").innerHTML = buildOptions();
-    document.getElementById("edit-rec-tec-tkt").innerHTML = buildOptions();
-    document.getElementById("edit-rec-tec-rep").innerHTML = buildOptions(true);
+    const editRec = document.getElementById("edit-rec-tec-rec");
+    const editTkt = document.getElementById("edit-rec-tec-tkt");
+    const editRep = document.getElementById("edit-rec-tec-rep");
+    if (editRec) editRec.innerHTML = buildOptions();
+    if (editTkt) editTkt.innerHTML = buildOptions();
+    if (editRep) editRep.innerHTML = buildOptions(true);
   }
 
   connectDatabase() {
@@ -185,7 +205,6 @@ class SoporteTIApp {
     document.getElementById("header-user-name").textContent = userObj.nombre;
     document.getElementById("header-user-role").textContent = userObj.rol;
 
-    // Mostrar y cargar vista de Admin ÚNICAMENTE si el usuario tiene rol ADMIN
     const adminTab = document.getElementById("nav-tab-admin");
     if (userObj.rol === "ADMIN") {
       await this.ensureAdminViewLoaded();
@@ -225,8 +244,7 @@ class SoporteTIApp {
   }
 
   bindEvents() {
-    // Login
-    document.getElementById("form-login").addEventListener("submit", async (e) => {
+    this.bind("form-login", "submit", async (e) => {
       e.preventDefault();
       const username = document.getElementById("login-username").value.trim().toLowerCase();
       const password = document.getElementById("login-password").value.trim();
@@ -247,129 +265,127 @@ class SoporteTIApp {
       this.toast.show(`Bienvenido, ${matched.nombre} (${matched.rol})`, "success");
     });
 
-    document.getElementById("btn-logout").addEventListener("click", () => this.logout());
+    this.bind("btn-logout", "click", () => this.logout());
 
-    // Navegación
     document.querySelectorAll(".nav-tab-btn").forEach((btn) => {
       btn.addEventListener("click", () => this.switchTab(btn.dataset.tab));
     });
 
-    // Control de fechas (Ayer, Hoy, Calendario)
-    document.getElementById("btn-date-yesterday").addEventListener("click", () => {
+    this.bind("btn-date-yesterday", "click", () => {
       this.selectedDate = getLocalDateString(-1);
       this.refreshUI();
     });
-    document.getElementById("btn-date-today").addEventListener("click", () => {
+    this.bind("btn-date-today", "click", () => {
       this.selectedDate = getLocalDateString(0);
       this.refreshUI();
     });
-    document.getElementById("input-selected-date").addEventListener("change", (e) => {
+    this.bind("input-selected-date", "change", (e) => {
       if (e.target.value) {
         this.selectedDate = e.target.value;
         this.refreshUI();
       }
     });
 
-    // Buscador diario
-    const dailyInput = document.getElementById("input-daily-search");
-    const clearDailyBtn = document.getElementById("btn-clear-daily-search");
-    dailyInput.addEventListener("input", (e) => {
+    this.bind("input-daily-search", "input", (e) => {
       this.dailySearchQuery = e.target.value;
-      clearDailyBtn.classList.toggle("hidden", !this.dailySearchQuery);
+      const clearBtn = document.getElementById("btn-clear-daily-search");
+      if (clearBtn) clearBtn.classList.toggle("hidden", !this.dailySearchQuery);
       this.refreshUI();
     });
-    clearDailyBtn.addEventListener("click", () => {
+    this.bind("btn-clear-daily-search", "click", () => {
       this.dailySearchQuery = "";
-      dailyInput.value = "";
-      clearDailyBtn.classList.add("hidden");
+      const dailyInput = document.getElementById("input-daily-search");
+      const clearBtn = document.getElementById("btn-clear-daily-search");
+      if (dailyInput) dailyInput.value = "";
+      if (clearBtn) clearBtn.classList.add("hidden");
       this.refreshUI();
     });
 
-    document.getElementById("btn-new-reception-date").addEventListener("click", () => {
-      document.getElementById("rec-fecha").value = this.selectedDate;
+    this.bind("btn-new-reception-date", "click", () => {
+      const recFecha = document.getElementById("rec-fecha");
+      if (recFecha) recFecha.value = this.selectedDate;
       this.switchTab("recepcion");
     });
 
-    // Escáner láser
-    const scannerInput = document.getElementById("rec-serie");
-    document.getElementById("btn-focus-scanner").addEventListener("click", () => scannerInput.focus());
-    scannerInput.addEventListener("keydown", (e) => {
+    this.bind("btn-focus-scanner", "click", () => {
+      const scannerInput = document.getElementById("rec-serie");
+      if (scannerInput) scannerInput.focus();
+    });
+    this.bind("rec-serie", "keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
+        const scannerInput = e.target;
         const cleaned = scannerInput.value.trim().toUpperCase();
         if (cleaned) {
           scannerInput.value = cleaned;
           const badge = document.getElementById("scan-flash-badge");
-          badge.classList.remove("hidden");
-          setTimeout(() => badge.classList.add("hidden"), 1800);
-          document.getElementById("rec-codigo-ce").focus();
+          if (badge) {
+            badge.classList.remove("hidden");
+            setTimeout(() => badge.classList.add("hidden"), 1800);
+          }
+          const ceEl = document.getElementById("rec-codigo-ce");
+          if (ceEl) ceEl.focus();
         }
       }
     });
 
-    document.getElementById("btn-rec-hoy").addEventListener("click", () => {
+    this.bind("btn-rec-hoy", "click", () => {
       document.getElementById("rec-fecha").value = getLocalDateString(0);
     });
-    document.getElementById("rec-hora").addEventListener("input", () => {
+    this.bind("rec-hora", "input", () => {
       this.manualTimeEdited = true;
     });
-    document.getElementById("btn-rec-ahora").addEventListener("click", () => {
+    this.bind("btn-rec-ahora", "click", () => {
       this.manualTimeEdited = false;
       document.getElementById("rec-hora").value = getCurrentTimeString();
     });
-    document.getElementById("btn-same-tech").addEventListener("click", () => {
+    this.bind("btn-same-tech", "click", () => {
       if (this.currentUser) {
         document.getElementById("rec-tecnico-ticket").value = this.currentUser.nombre;
       }
     });
 
-    // Cargador Sí / No
-    const btnSi = document.getElementById("btn-cargador-si");
-    const btnNo = document.getElementById("btn-cargador-no");
-    btnSi.addEventListener("click", () => {
+    this.bind("btn-cargador-si", "click", () => {
       this.traeCargador = true;
-      btnSi.className = "py-2.5 px-3 rounded-xl text-sm font-bold border-2 flex items-center justify-center gap-1.5 transition bg-emerald-600 text-white border-emerald-600 shadow-sm";
-      btnNo.className = "py-2.5 px-3 rounded-xl text-sm font-bold border-2 flex items-center justify-center gap-1.5 transition bg-white text-slate-600 border-slate-300 hover:bg-slate-50";
+      document.getElementById("btn-cargador-si").className = "py-2.5 px-3 rounded-xl text-sm font-bold border-2 flex items-center justify-center gap-1.5 transition bg-emerald-600 text-white border-emerald-600 shadow-sm";
+      document.getElementById("btn-cargador-no").className = "py-2.5 px-3 rounded-xl text-sm font-bold border-2 flex items-center justify-center gap-1.5 transition bg-white text-slate-600 border-slate-300 hover:bg-slate-50";
     });
-    btnNo.addEventListener("click", () => {
+    this.bind("btn-cargador-no", "click", () => {
       this.traeCargador = false;
-      btnNo.className = "py-2.5 px-3 rounded-xl text-sm font-bold border-2 flex items-center justify-center gap-1.5 transition bg-rose-600 text-white border-rose-600 shadow-sm";
-      btnSi.className = "py-2.5 px-3 rounded-xl text-sm font-bold border-2 flex items-center justify-center gap-1.5 transition bg-white text-slate-600 border-slate-300 hover:bg-slate-50";
+      document.getElementById("btn-cargador-no").className = "py-2.5 px-3 rounded-xl text-sm font-bold border-2 flex items-center justify-center gap-1.5 transition bg-rose-600 text-white border-rose-600 shadow-sm";
+      document.getElementById("btn-cargador-si").className = "py-2.5 px-3 rounded-xl text-sm font-bold border-2 flex items-center justify-center gap-1.5 transition bg-white text-slate-600 border-slate-300 hover:bg-slate-50";
     });
 
-    // Contador 5 dígitos CE
-    const ceInput = document.getElementById("rec-codigo-ce");
-    ceInput.addEventListener("input", () => {
+    this.bind("rec-codigo-ce", "input", (e) => {
+      const ceInput = e.target;
       ceInput.value = ceInput.value.replace(/\D/g, "").slice(0, 5);
       const counter = document.getElementById("ce-digits-counter");
-      counter.textContent = `${ceInput.value.length}/5`;
-      counter.className = `text-[11px] font-mono font-bold ${
-        ceInput.value.length === 5 ? "text-emerald-600" : "text-slate-400"
-      }`;
+      if (counter) {
+        counter.textContent = `${ceInput.value.length}/5`;
+        counter.className = `text-[11px] font-mono font-bold ${
+          ceInput.value.length === 5 ? "text-emerald-600" : "text-slate-400"
+        }`;
+      }
     });
 
-    // Estudiante vs Docente
-    const btnEst = document.getElementById("btn-tipo-estudiante");
-    const btnDoc = document.getElementById("btn-tipo-docente");
-    btnEst.addEventListener("click", () => {
+    this.bind("btn-tipo-estudiante", "click", () => {
       this.tipoBeneficiario = "Estudiante";
-      btnEst.className = "px-4 py-2 rounded-lg text-xs font-bold transition bg-slate-900 text-white shadow";
-      btnDoc.className = "px-4 py-2 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900";
+      document.getElementById("btn-tipo-estudiante").className = "px-4 py-2 rounded-lg text-xs font-bold transition bg-slate-900 text-white shadow";
+      document.getElementById("btn-tipo-docente").className = "px-4 py-2 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900";
       document.getElementById("label-id-beneficiario").textContent = "NIE del estudiante *";
       document.getElementById("label-nombre-beneficiario").textContent = "Nombre del estudiante *";
       document.getElementById("rec-grado").value = "1° Grado";
     });
-    btnDoc.addEventListener("click", () => {
+    this.bind("btn-tipo-docente", "click", () => {
       this.tipoBeneficiario = "Docente";
-      btnDoc.className = "px-4 py-2 rounded-lg text-xs font-bold transition bg-slate-900 text-white shadow";
-      btnEst.className = "px-4 py-2 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900";
+      document.getElementById("btn-tipo-docente").className = "px-4 py-2 rounded-lg text-xs font-bold transition bg-slate-900 text-white shadow";
+      document.getElementById("btn-tipo-estudiante").className = "px-4 py-2 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900";
       document.getElementById("label-id-beneficiario").textContent = "DUI del docente *";
       document.getElementById("label-nombre-beneficiario").textContent = "Nombre del docente *";
       document.getElementById("rec-grado").value = "Docente / No aplica";
     });
 
-    // Chips fallas frecuentes
-    document.getElementById("damage-chips-container").addEventListener("click", (e) => {
+    this.bind("damage-chips-container", "click", (e) => {
       const btn = e.target.closest(".damage-chip");
       if (!btn) return;
       const falla = btn.dataset.falla;
@@ -380,10 +396,8 @@ class SoporteTIApp {
         : [...parts, falla].join(", ");
     });
 
-    // Guardar recepción
-    document.getElementById("form-recepcion").addEventListener("submit", (e) => this.handleReceptionSubmit(e));
+    this.bind("form-recepcion", "submit", (e) => this.handleReceptionSubmit(e));
 
-    // Delegación de acciones en tablas y tarjetas
     document.addEventListener("click", (e) => {
       const actionBtn = e.target.closest("[data-action]");
       if (actionBtn) {
@@ -425,28 +439,26 @@ class SoporteTIApp {
       }
     });
 
-    // Modales
-    document.getElementById("btn-close-edit-record").addEventListener("click", () => this.closeModal("modal-edit-record"));
-    document.getElementById("btn-cancel-edit-record").addEventListener("click", () => this.closeModal("modal-edit-record"));
-    document.getElementById("form-edit-record").addEventListener("submit", (e) => this.confirmAdminEditRecord(e));
+    this.bind("btn-close-edit-record", "click", () => this.closeModal("modal-edit-record"));
+    this.bind("btn-cancel-edit-record", "click", () => this.closeModal("modal-edit-record"));
+    this.bind("form-edit-record", "submit", (e) => this.confirmAdminEditRecord(e));
 
-    document.getElementById("btn-cancel-finish").addEventListener("click", () => this.closeModal("modal-finish"));
-    document.getElementById("btn-close-finish").addEventListener("click", () => this.closeModal("modal-finish"));
-    document.getElementById("btn-confirm-finish").addEventListener("click", () => this.confirmFinishRepair());
+    this.bind("btn-cancel-finish", "click", () => this.closeModal("modal-finish"));
+    this.bind("btn-close-finish", "click", () => this.closeModal("modal-finish"));
+    this.bind("btn-confirm-finish", "click", () => this.confirmFinishRepair());
 
-    document.getElementById("btn-close-detail").addEventListener("click", () => this.closeModal("modal-detail"));
-    document.getElementById("btn-close-detail-footer").addEventListener("click", () => this.closeModal("modal-detail"));
+    this.bind("btn-close-detail", "click", () => this.closeModal("modal-detail"));
+    this.bind("btn-close-detail-footer", "click", () => this.closeModal("modal-detail"));
 
-    document.getElementById("btn-cancel-delete").addEventListener("click", () => this.closeModal("modal-delete"));
-    document.getElementById("btn-confirm-delete").addEventListener("click", () => this.confirmDeleteRecord());
+    this.bind("btn-cancel-delete", "click", () => this.closeModal("modal-delete"));
+    this.bind("btn-confirm-delete", "click", () => this.confirmDeleteRecord());
 
-    // Filtros Historial Global
     ["global-search", "global-date", "global-status", "global-resolution"].forEach((id) => {
-      document.getElementById(id).addEventListener("input", () => this.refreshUI());
-      document.getElementById(id).addEventListener("change", () => this.refreshUI());
+      this.bind(id, "input", () => this.refreshUI());
+      this.bind(id, "change", () => this.refreshUI());
     });
 
-    document.getElementById("btn-clear-global-filters").addEventListener("click", () => {
+    this.bind("btn-clear-global-filters", "click", () => {
       document.getElementById("global-search").value = "";
       document.getElementById("global-date").value = "";
       document.getElementById("global-status").value = "TODOS";
@@ -454,7 +466,7 @@ class SoporteTIApp {
       this.refreshUI();
     });
 
-    document.getElementById("btn-export-csv").addEventListener("click", () => {
+    this.bind("btn-export-csv", "click", () => {
       const list = this.getFilteredGlobalRecords();
       if (list.length === 0) {
         this.toast.show("No hay registros para exportar.", "error");
@@ -466,10 +478,7 @@ class SoporteTIApp {
   }
 
   bindAdminEvents() {
-    const formAdmin = document.getElementById("form-admin-user");
-    if (!formAdmin) return;
-
-    formAdmin.addEventListener("submit", async (e) => {
+    this.bind("form-admin-user", "submit", async (e) => {
       e.preventDefault();
       if (this.currentUser?.rol !== "ADMIN") return;
 
@@ -499,7 +508,7 @@ class SoporteTIApp {
       }
     });
 
-    document.getElementById("btn-cancel-edit-user").addEventListener("click", () => this.resetAdminUserForm());
+    this.bind("btn-cancel-edit-user", "click", () => this.resetAdminUserForm());
   }
 
   resetAdminUserForm() {
@@ -534,24 +543,32 @@ class SoporteTIApp {
       if (el) el.classList.toggle("hidden", view !== tabName);
     });
 
-    document
-      .getElementById("daily-control-bar")
-      .classList.toggle("hidden", tabName !== "general" && tabName !== "soporte");
+    const controlBar = document.getElementById("daily-control-bar");
+    if (controlBar) {
+      controlBar.classList.toggle("hidden", tabName !== "general" && tabName !== "soporte");
+    }
 
     if (tabName === "recepcion") {
-      setTimeout(() => document.getElementById("rec-serie").focus(), 100);
+      setTimeout(() => {
+        const serieEl = document.getElementById("rec-serie");
+        if (serieEl) serieEl.focus();
+      }, 100);
     }
     this.refreshUI();
   }
 
   getFilteredGlobalRecords() {
-    const q = document.getElementById("global-search").value.trim().toLowerCase();
+    const searchEl = document.getElementById("global-search");
+    if (!searchEl) return this.allRecords;
+
+    const q = searchEl.value.trim().toLowerCase();
     const dateFilter = document.getElementById("global-date").value;
     const statusFilter = document.getElementById("global-status").value;
     const resFilter = document.getElementById("global-resolution").value;
 
     const hasFilters = q || dateFilter || statusFilter !== "TODOS" || resFilter !== "TODAS";
-    document.getElementById("btn-clear-global-filters").classList.toggle("hidden", !hasFilters);
+    const clearBtn = document.getElementById("btn-clear-global-filters");
+    if (clearBtn) clearBtn.classList.toggle("hidden", !hasFilters);
 
     return this.allRecords
       .filter((item) => {
@@ -681,7 +698,6 @@ class SoporteTIApp {
     }
   }
 
-  // ASIGNACIÓN DIRECTA AL TÉCNICO CON SESIÓN ACTIVA (SIN DESPLEGABLES)
   async grabEquipmentDirectly(record) {
     if (!this.currentUser) return;
     const tech = this.currentUser.nombre;
@@ -863,7 +879,8 @@ class SoporteTIApp {
   }
 
   closeModal(modalId) {
-    document.getElementById(modalId).classList.add("hidden");
+    const modal = document.getElementById(modalId);
+    if (modal) modal.classList.add("hidden");
     this.activeRecordForModal = null;
   }
 }
