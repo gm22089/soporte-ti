@@ -1,0 +1,61 @@
+<section id="view-historial" class="hidden space-y-5">
+  <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+      <div>
+        <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+          <i data-lucide="history" class="w-5 h-5 text-blue-600"></i>
+          Historial Global Multi-Fecha
+        </h2>
+        <p class="text-xs text-slate-500">Consulta consolidada de todas las fechas registradas.</p>
+      </div>
+      <button type="button" id="btn-export-csv" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition self-start md:self-auto">
+        <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+        Exportar a Excel / CSV (<span id="export-csv-count">0</span>)
+      </button>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <input type="text" id="global-search" placeholder="Serie, NIE, DUI, CE o Técnico..." class="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      <input type="date" id="global-date" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      <select id="global-status" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <option value="TODOS">Todos los estados</option>
+        <option value="En espera">En espera</option>
+        <option value="En reparación">En reparación</option>
+        <option value="Finalizado">Finalizado</option>
+      </select>
+      <div class="flex gap-2">
+        <select id="global-resolution" class="flex-1 px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="TODAS">Todas las resoluciones</option>
+          <option value="Reparación en sede">Reparación en sede</option>
+          <option value="Atención efectiva">Atención efectiva</option>
+          <option value="Enviar a Garantía">Enviar a Garantía</option>
+        </select>
+        <button type="button" id="btn-clear-global-filters" class="hidden px-2.5 py-2 text-xs font-semibold bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl" title="Limpiar filtros">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="bg-slate-900 text-slate-200 text-[11px] uppercase tracking-wider">
+            <th class="py-3 px-3.5 font-semibold">Fecha</th>
+            <th class="py-3 px-3.5 font-semibold">Hora Rec.</th>
+            <th class="py-3 px-3.5 font-semibold">Serie</th>
+            <th class="py-3 px-3.5 font-semibold">Centro Educativo</th>
+            <th class="py-3 px-3.5 font-semibold">Beneficiario</th>
+            <th class="py-3 px-3.5 font-semibold">Recepcionó / Ticket</th>
+            <th class="py-3 px-3.5 font-semibold">Técnico Reparador</th>
+            <th class="py-3 px-3.5 font-semibold">Estado</th>
+            <th class="py-3 px-3.5 font-semibold">Resolución</th>
+            <th class="py-3 px-3.5 font-semibold text-right">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="global-table-body" class="divide-y divide-slate-200 text-xs"></tbody>
+      </table>
+    </div>
+  </div>
+</section>

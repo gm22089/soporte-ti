@@ -1,0 +1,196 @@
+<!-- MODAL FINALIZAR REPARACIÓN -->
+<div id="modal-finish" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
+    <div class="bg-emerald-900 text-white px-5 py-4 flex items-center justify-between">
+      <h3 class="font-bold text-base flex items-center gap-2"><i data-lucide="check-square" class="w-5 h-5 text-emerald-300"></i> Finalizar Reparación y Cerrar Proceso</h3>
+      <button type="button" id="btn-cancel-finish" class="text-slate-300 hover:text-white p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div class="p-5 space-y-4">
+      <div id="finish-info-box" class="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs flex items-center justify-between"></div>
+      <div>
+        <label class="block text-xs font-bold text-slate-700 mb-2">Selecciona el resultado de la atención *</label>
+        <div id="finish-resolutions-container" class="space-y-2.5"></div>
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-slate-700 mb-1.5">Nota técnica o detalle de solución (opcional)</label>
+        <textarea id="finish-nota" rows="2" placeholder="Ej. Se reinstaló imagen del sistema..." class="w-full px-3.5 py-2 text-xs bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" id="btn-close-finish" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancelar</button>
+        <button type="button" id="btn-confirm-finish" class="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow">Confirmar Finalización</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL FICHA DE DETALLE COMPLETO -->
+<div id="modal-detail" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
+    <div class="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
+      <div>
+        <span class="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Ficha Técnica, Logística y Auditoría</span>
+        <h3 id="detail-serie-title" class="font-mono font-extrabold text-lg text-white"></h3>
+      </div>
+      <button type="button" id="btn-close-detail" class="text-slate-300 hover:text-white p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div id="detail-content" class="p-6 overflow-y-auto space-y-5 text-xs"></div>
+    <div class="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex justify-end">
+      <button type="button" id="btn-close-detail-footer" class="px-5 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800">Cerrar Ficha</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ELIMINAR (ADMIN) -->
+<div id="modal-delete" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 p-5 space-y-4">
+    <div class="flex items-center gap-3 text-red-700">
+      <div class="p-2.5 bg-red-100 rounded-xl"><i data-lucide="trash-2" class="w-6 h-6 text-red-600"></i></div>
+      <div>
+        <h3 class="font-bold text-base text-slate-900">¿Eliminar este registro?</h3>
+        <p class="text-xs text-slate-500">Acción exclusiva de Administrador.</p>
+      </div>
+    </div>
+    <p id="delete-info-text" class="text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-200"></p>
+    <div class="flex justify-end gap-2">
+      <button type="button" id="btn-cancel-delete" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancelar</button>
+      <button type="button" id="btn-confirm-delete" class="px-4 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white">Sí, eliminar registro</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CORREGIR / EDITAR REGISTRO (EXCLUSIVO ADMIN) -->
+<div id="modal-edit-record" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col">
+    <div class="bg-amber-600 text-white px-6 py-4 flex items-center justify-between">
+      <div>
+        <span class="text-[11px] uppercase tracking-wider font-extrabold text-amber-100">Modo Corrección Administrativa</span>
+        <h3 class="font-bold text-base">Editar Registro y Guardar Constancia de Auditoría</h3>
+      </div>
+      <button type="button" id="btn-close-edit-record" class="text-white/80 hover:text-white p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+
+    <form id="form-edit-record" class="p-6 overflow-y-auto space-y-4 text-xs">
+      <input type="hidden" id="edit-rec-id" />
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Fecha</label>
+          <input type="date" id="edit-rec-fecha" required class="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono" />
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Serie del equipo</label>
+          <input type="text" id="edit-rec-serie" required class="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono font-bold uppercase" />
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">¿Trae cargador?</label>
+          <select id="edit-rec-cargador" class="w-full px-3 py-2 border border-slate-300 rounded-lg">
+            <option value="true">Sí incluye cargador</option>
+            <option value="false">No trae cargador</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Código CE (5 dígitos)</label>
+          <input type="text" id="edit-rec-codigo-ce" maxlength="5" required class="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono" />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block font-bold text-slate-700 mb-1">Nombre del Centro Educativo</label>
+          <input type="text" id="edit-rec-nombre-ce" required class="w-full px-3 py-2 border border-slate-300 rounded-lg" />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Tipo Beneficiario</label>
+          <select id="edit-rec-tipo-ben" class="w-full px-3 py-2 border border-slate-300 rounded-lg">
+            <option value="Estudiante">Estudiante</option>
+            <option value="Docente">Docente</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">NIE / DUI Beneficiario</label>
+          <input type="text" id="edit-rec-id-ben" required class="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono" />
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Nombre Beneficiario</label>
+          <input type="text" id="edit-rec-nombre-ben" required class="w-full px-3 py-2 border border-slate-300 rounded-lg" />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Grado</label>
+          <select id="edit-rec-grado" class="w-full px-3 py-2 border border-slate-300 rounded-lg"></select>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Celular</label>
+          <input type="text" id="edit-rec-celular" class="w-full px-3 py-2 border border-slate-300 rounded-lg" />
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">DUI Responsable</label>
+          <input type="text" id="edit-rec-dui-resp" class="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono" />
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Nombre Responsable</label>
+          <input type="text" id="edit-rec-nombre-resp" class="w-full px-3 py-2 border border-slate-300 rounded-lg" />
+        </div>
+      </div>
+
+      <div>
+        <label class="block font-bold text-slate-700 mb-1">Daño Reportado</label>
+        <input type="text" id="edit-rec-dano" required class="w-full px-3 py-2 border border-slate-300 rounded-lg" />
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Recepcionó</label>
+          <select id="edit-rec-tec-rec" class="w-full px-3 py-2 border border-slate-300 rounded-lg"></select>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Creó Ticket</label>
+          <select id="edit-rec-tec-tkt" class="w-full px-3 py-2 border border-slate-300 rounded-lg"></select>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Técnico Reparador</label>
+          <select id="edit-rec-tec-rep" class="w-full px-3 py-2 border border-slate-300 rounded-lg"></select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Estado</label>
+          <select id="edit-rec-estado" class="w-full px-3 py-2 border border-slate-300 rounded-lg">
+            <option value="En espera">En espera</option>
+            <option value="En reparación">En reparación</option>
+            <option value="Finalizado">Finalizado</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Resolución</label>
+          <select id="edit-rec-resolucion" class="w-full px-3 py-2 border border-slate-300 rounded-lg">
+            <option value="">Pendiente</option>
+            <option value="Reparación en sede">Reparación en sede</option>
+            <option value="Atención efectiva">Atención efectiva</option>
+            <option value="Enviar a Garantía">Enviar a Garantía</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="pt-2 border-t border-slate-200">
+        <label class="block font-extrabold text-amber-800 mb-1">
+          Motivo de la corrección (Obligatorio para auditoría) *
+        </label>
+        <input type="text" id="edit-rec-motivo" required placeholder="Ej. Se corrigió dígito mal escrito en la serie / NIE equivocado" class="w-full px-3.5 py-2.5 border-2 border-amber-300 bg-amber-50/40 rounded-xl focus:outline-none focus:border-amber-600" />
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" id="btn-cancel-edit-record" class="px-4 py-2 rounded-xl font-semibold text-slate-600 hover:bg-slate-100">Cancelar</button>
+        <button type="submit" class="px-5 py-2.5 rounded-xl font-bold bg-amber-600 hover:bg-amber-700 text-white shadow">
+          Guardar Corrección y Registrar Auditoría
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

@@ -37,7 +37,6 @@ export class UIRenderer {
   updateDailyHeader(selectedDate, filteredCount, totalDayCount) {
     const today = getLocalDateString(0);
     const yesterday = getLocalDateString(-1);
-    const tomorrow = getLocalDateString(1);
 
     const tagEl = document.getElementById("daily-tag-badge");
     if (selectedDate === today) {
@@ -46,9 +45,6 @@ export class UIRenderer {
     } else if (selectedDate === yesterday) {
       tagEl.textContent = "AYER";
       tagEl.className = "px-2 py-0.5 rounded text-[10px] font-bold tracking-wide bg-slate-600 text-white";
-    } else if (selectedDate === tomorrow) {
-      tagEl.textContent = "MAÑANA";
-      tagEl.className = "px-2 py-0.5 rounded text-[10px] font-bold tracking-wide bg-indigo-600 text-white";
     } else {
       tagEl.textContent = "FECHA SELECCIONADA";
       tagEl.className = "px-2 py-0.5 rounded text-[10px] font-bold tracking-wide bg-slate-200 text-slate-700";
@@ -178,12 +174,12 @@ export class UIRenderer {
               <div><span class="text-slate-400">Rec:</span> <span class="font-semibold text-slate-800">${item.tecnicoRecepcion}</span></div>
               <div class="mt-0.5"><span class="text-slate-400">Ticket:</span> <span class="font-medium text-slate-700">${item.tecnicoTicket}</span></div>
             </td>
-            <td class="py-3 px-3.5 min-w-[165px]">
+            <td class="py-3 px-3.5 min-w-[175px]">
               ${
                 item.tecnicoReparacion
                   ? `<div class="font-bold text-blue-800">${item.tecnicoReparacion}</div>
-                     <div class="text-[11px] text-slate-500 font-mono mt-0.5">Ini: ${item.horaInicioReparacion || "—"}</div>
-                     <div class="text-[11px] text-slate-500 font-mono">Fin: ${item.horaFinalizacionProceso || "—"}</div>`
+                     <div class="text-[11px] text-slate-600 font-mono mt-0.5">Agarró: ${item.horaInicioReparacion || "—"}</div>
+                     <div class="text-[11px] text-emerald-700 font-mono">Solventó: ${item.horaFinalizacionProceso || "En curso"}</div>`
                   : `<span class="text-slate-400 italic">Sin técnico asignado</span>`
               }
             </td>
@@ -206,7 +202,7 @@ export class UIRenderer {
       .join("");
   }
 
-  renderSupportBoard(selectedDate, filteredDailyRecords, nowTimestamp) {
+  renderSupportBoard(selectedDate, filteredDailyRecords, nowTimestamp, currentUser) {
     const esperaList = filteredDailyRecords.filter((r) => r.estado === "En espera");
     const repList = filteredDailyRecords.filter((r) => r.estado === "En reparación");
     const finList = filteredDailyRecords.filter((r) => r.estado === "Finalizado");
@@ -215,6 +211,9 @@ export class UIRenderer {
     document.getElementById("count-col-reparacion").textContent = repList.length;
     document.getElementById("count-col-finalizados").textContent = finList.length;
 
+    const currentUserName = currentUser ? currentUser.nombre : "Técnico";
+
+    // COLUMNA 1: EN ESPERA (Al dar clic, asigna automáticamente al usuario logueado)
     const colEspera = document.getElementById("list-col-espera");
     colEspera.innerHTML =
       esperaList.length === 0
@@ -235,7 +234,7 @@ export class UIRenderer {
                       <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
                         Espera: ${formatDurationMinutes(liveWaitMin)}
                       </span>
-                      <span class="block text-[11px] font-mono text-slate-500 mt-1">Rec: ${item.horaRecepcion}</span>
+                      <span class="block text-[11px] font-mono text-slate-600 mt-1">Recibido: ${item.horaRecepcion}</span>
                     </div>
                   </div>
                   <div class="bg-white p-2.5 rounded-lg border border-slate-200 text-xs">
@@ -249,13 +248,14 @@ export class UIRenderer {
                   </div>
                   <button type="button" data-action="grab" data-id="${item.id}" class="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-sm flex items-center justify-center gap-2 transition">
                     <i data-lucide="play" class="w-4 h-4 pointer-events-none"></i>
-                    Agarrar Equipo para Reparar
+                    Agarrar Equipo (${currentUserName})
                   </button>
                 </div>
               `;
             })
             .join("");
 
+    // COLUMNA 2: EN REPARACIÓN (Muestra hora exacta en que agarró el equipo)
     const colRep = document.getElementById("list-col-reparacion");
     colRep.innerHTML =
       repList.length === 0
@@ -267,8 +267,11 @@ export class UIRenderer {
               return `
                 <div class="p-4 rounded-xl border-2 border-blue-300 bg-blue-50/30 space-y-3">
                   <div class="flex items-center justify-between bg-blue-900 text-white px-3 py-2 rounded-lg">
-                    <span class="text-xs font-bold">${item.tecnicoReparacion}</span>
-                    <span class="text-[11px] font-mono bg-blue-800 px-2 py-0.5 rounded">Inicio: ${item.horaInicioReparacion}</span>
+                    <span class="text-xs font-bold flex items-center gap-1.5">
+                      <i data-lucide="user-check" class="w-3.5 h-3.5 text-sky-300"></i>
+                      ${item.tecnicoReparacion}
+                    </span>
+                    <span class="text-[11px] font-mono bg-blue-800 px-2 py-0.5 rounded">Agarró: ${item.horaInicioReparacion}</span>
                   </div>
                   <div>
                     <span class="font-mono font-extrabold text-sm text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-300">${item.serieEquipo}</span>
@@ -280,23 +283,24 @@ export class UIRenderer {
                   </div>
                   <div class="grid grid-cols-2 gap-2 text-[11px]">
                     <div class="bg-slate-100 p-2 rounded-lg">
-                      <span class="text-slate-500 block">Tiempo que esperó:</span>
-                      <span class="font-bold text-slate-800">${formatDurationMinutes(item.tiempoEsperaMinutos)}</span>
+                      <span class="text-slate-500 block">Recepción: <strong>${item.horaRecepcion}</strong></span>
+                      <span class="text-slate-600 block">Esperó: <strong>${formatDurationMinutes(item.tiempoEsperaMinutos)}</strong></span>
                     </div>
                     <div class="bg-blue-100 p-2 rounded-lg">
-                      <span class="text-blue-700 block">Tiempo reparando:</span>
-                      <span class="font-extrabold text-blue-950">${formatDurationMinutes(liveRepairMin)}</span>
+                      <span class="text-blue-700 block">En taller:</span>
+                      <span class="font-extrabold text-blue-950 text-xs">${formatDurationMinutes(liveRepairMin)}</span>
                     </div>
                   </div>
                   <button type="button" data-action="finish" data-id="${item.id}" class="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center justify-center gap-2 transition">
                     <i data-lucide="check-square" class="w-4 h-4 pointer-events-none"></i>
-                    Finalizar Reparación
+                    Solventar / Finalizar Proceso
                   </button>
                 </div>
               `;
             })
             .join("");
 
+    // COLUMNA 3: FINALIZADOS (Muestra hora recepción, hora agarrado y hora solventado)
     const colFin = document.getElementById("list-col-finalizados");
     colFin.innerHTML =
       finList.length === 0
@@ -311,20 +315,24 @@ export class UIRenderer {
                 </div>
                 <div>
                   <p class="text-xs font-bold text-slate-800">${item.nombreBeneficiario}</p>
-                  <p class="text-[11px] text-slate-500">Técnico: <strong class="text-slate-700">${item.tecnicoReparacion}</strong></p>
+                  <p class="text-[11px] text-slate-600">Solventado por: <strong class="text-slate-900">${item.tecnicoReparacion}</strong></p>
                 </div>
-                <div class="bg-white p-2.5 rounded-lg border border-slate-200 text-[11px] font-mono text-slate-600 space-y-1">
+                <div class="bg-white p-2.5 rounded-lg border border-slate-200 text-[11px] font-mono text-slate-700 space-y-1">
                   <div class="flex justify-between">
-                    <span>Recepción: ${item.horaRecepcion}</span>
-                    <span>Espera: ${formatDurationMinutes(item.tiempoEsperaMinutos)}</span>
+                    <span>1. Recepción:</span>
+                    <strong>${item.horaRecepcion}</strong>
                   </div>
-                  <div class="flex justify-between">
-                    <span>Inicio: ${item.horaInicioReparacion}</span>
+                  <div class="flex justify-between text-blue-800">
+                    <span>2. Agarró equipo:</span>
+                    <strong>${item.horaInicioReparacion || "—"}</strong>
+                  </div>
+                  <div class="flex justify-between text-emerald-800 font-bold border-t border-slate-100 pt-1">
+                    <span>3. Solventado / Fin:</span>
+                    <span>${item.horaFinalizacionProceso || "—"}</span>
+                  </div>
+                  <div class="flex justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-100">
                     <span>Taller: ${formatDurationMinutes(item.tiempoReparacionMinutos)}</span>
-                  </div>
-                  <div class="flex justify-between font-bold text-emerald-800 pt-1 border-t border-slate-100">
-                    <span>Fin proceso: ${item.horaFinalizacionProceso}</span>
-                    <button type="button" data-action="detail" data-id="${item.id}" class="text-blue-600 hover:underline font-sans">Ver detalle</button>
+                    <button type="button" data-action="detail" data-id="${item.id}" class="text-blue-600 hover:underline font-sans font-semibold">Ver ficha</button>
                   </div>
                 </div>
               </div>
@@ -381,7 +389,10 @@ export class UIRenderer {
   }
 
   renderAdminPanel(usersList, allRecords) {
-    document.getElementById("admin-users-count").textContent = `${usersList.length} usuarios`;
+    const countEl = document.getElementById("admin-users-count");
+    if (!countEl) return;
+
+    countEl.textContent = `${usersList.length} usuarios`;
     const usersTbody = document.getElementById("admin-users-tbody");
 
     const roleOrder = { ADMIN: 1, LOGISTICA: 2, TECNICO: 3 };
@@ -408,7 +419,6 @@ export class UIRenderer {
       )
       .join("");
 
-    // Bitácora de registros con correcciones
     const correctedRecords = allRecords.filter(
       (r) => Array.isArray(r.historialCorrecciones) && r.historialCorrecciones.length > 0
     );
@@ -512,13 +522,13 @@ export class UIRenderer {
             <span class="block text-[11px] text-slate-400">Ticket: ${item.tecnicoTicket}</span>
           </div>
           <div class="bg-slate-800 p-2.5 rounded-lg">
-            <span class="text-slate-400 block text-[10px]">2. Inicio Reparación</span>
+            <span class="text-slate-400 block text-[10px]">2. Agarrado en Taller</span>
             <strong class="text-sm font-mono">${item.horaInicioReparacion || "Pendiente"}</strong>
             <span class="block text-[11px] text-sky-300 mt-0.5">Técnico: ${item.tecnicoReparacion || "Sin asignar"}</span>
             <span class="block text-[11px] text-amber-300">Espera: ${formatDurationMinutes(item.tiempoEsperaMinutos)}</span>
           </div>
           <div class="bg-slate-800 p-2.5 rounded-lg">
-            <span class="text-slate-400 block text-[10px]">3. Finalización Proceso</span>
+            <span class="text-slate-400 block text-[10px]">3. Solventado / Fin</span>
             <strong class="text-sm font-mono">${item.horaFinalizacionProceso || "En curso"}</strong>
             <span class="block text-[11px] text-emerald-300 mt-0.5">Duración taller: ${formatDurationMinutes(item.tiempoReparacionMinutos)}</span>
           </div>

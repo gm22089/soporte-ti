@@ -1,0 +1,103 @@
+<section id="view-admin" class="hidden space-y-6">
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="bg-slate-900 text-white px-5 py-4">
+        <h2 id="admin-form-title" class="text-base font-bold flex items-center gap-2">
+          <i data-lucide="user-plus" class="w-5 h-5 text-amber-400"></i>
+          Registrar / Editar Personal
+        </h2>
+        <p class="text-xs text-slate-400 mt-0.5">Asigna rol, usuario y contraseña de acceso</p>
+      </div>
+
+      <form id="form-admin-user" class="p-5 space-y-4">
+        <input type="hidden" id="admin-user-id" />
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Nombre completo *</label>
+          <input type="text" id="admin-user-nombre" required placeholder="Ej. Roberto Soriano" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Rol en el sistema *</label>
+          <select id="admin-user-rol" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="ADMIN">ADMIN (Control total y correcciones)</option>
+            <option value="LOGISTICA">LOGÍSTICA (Recepción y tickets)</option>
+            <option value="TECNICO">TÉCNICO (Taller de reparación)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Nombre de usuario (Login) *</label>
+          <input type="text" id="admin-user-username" required placeholder="Ej. rsoriano" class="w-full px-3 py-2 text-sm font-mono border border-slate-300 rounded-xl lowercase focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Contraseña de acceso *</label>
+          <input type="text" id="admin-user-password" required placeholder="Ej. Clave2026" class="w-full px-3 py-2 text-sm font-mono border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+
+        <div class="flex items-center gap-2 pt-2">
+          <button type="submit" id="btn-save-admin-user" class="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow">
+            Guardar Usuario
+          </button>
+          <button type="button" id="btn-cancel-edit-user" class="hidden py-2.5 px-3 rounded-xl text-xs font-semibold bg-slate-200 hover:bg-slate-300 text-slate-700">
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-bold text-slate-900">Usuarios y Permisos en Firestore</h3>
+          <p class="text-xs text-slate-500">Solo el personal listado aquí puede iniciar sesión</p>
+        </div>
+        <span id="admin-users-count" class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-900 text-white">0</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-slate-900 text-slate-200 text-[11px] uppercase tracking-wider">
+              <th class="py-3 px-4 font-semibold">Nombre</th>
+              <th class="py-3 px-4 font-semibold">Rol</th>
+              <th class="py-3 px-4 font-semibold">Usuario</th>
+              <th class="py-3 px-4 font-semibold">Contraseña</th>
+              <th class="py-3 px-4 font-semibold text-right">Gestión</th>
+            </tr>
+          </thead>
+          <tbody id="admin-users-tbody" class="divide-y divide-slate-200 text-xs"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- BITÁCORA DE AUDITORÍA -->
+  <div class="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
+    <div class="px-5 py-4 border-b border-amber-200 bg-amber-50/70">
+      <h3 class="text-base font-bold text-amber-950 flex items-center gap-2">
+        <i data-lucide="file-warning" class="w-5 h-5 text-amber-600"></i>
+        Bitácora de Registros Corregidos por Administración
+      </h3>
+      <p class="text-xs text-amber-800">
+        Constancia permanente de quién cometió el error originalmente y qué administrador realizó la corrección.
+      </p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="bg-slate-900 text-slate-200 text-[11px] uppercase tracking-wider">
+            <th class="py-3 px-4 font-semibold">Fecha Reg.</th>
+            <th class="py-3 px-4 font-semibold">Serie Equipo</th>
+            <th class="py-3 px-4 font-semibold">Responsable Original</th>
+            <th class="py-3 px-4 font-semibold">Admin que corrigió</th>
+            <th class="py-3 px-4 font-semibold">Motivo / Detalle</th>
+            <th class="py-3 px-4 font-semibold text-right">Ver Ficha</th>
+          </tr>
+        </thead>
+        <tbody id="admin-audit-tbody" class="divide-y divide-slate-200 text-xs"></tbody>
+      </table>
+    </div>
+  </div>
+</section>

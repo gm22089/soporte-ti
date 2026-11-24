@@ -1,0 +1,34 @@
+<section id="view-soporte" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+  <div class="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
+    <div class="bg-amber-50 border-b border-amber-200 px-4 py-3.5 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <i data-lucide="clock" class="w-5 h-5 text-amber-600"></i>
+        <h3 class="font-bold text-amber-950 text-sm">En Espera de Técnico</h3>
+      </div>
+      <span id="count-col-espera" class="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-amber-500 text-slate-950">0</span>
+    </div>
+    <div id="list-col-espera" class="p-4 space-y-3.5"></div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-blue-200 shadow-sm overflow-hidden">
+    <div class="bg-blue-50 border-b border-blue-200 px-4 py-3.5 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <i data-lucide="wrench" class="w-5 h-5 text-blue-600"></i>
+        <h3 class="font-bold text-blue-950 text-sm">En Reparación (Taller)</h3>
+      </div>
+      <span id="count-col-reparacion" class="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-blue-600 text-white">0</span>
+    </div>
+    <div id="list-col-reparacion" class="p-4 space-y-3.5"></div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-emerald-200 shadow-sm overflow-hidden">
+    <div class="bg-emerald-50 border-b border-emerald-200 px-4 py-3.5 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-600"></i>
+        <h3 class="font-bold text-emerald-950 text-sm">Reparaciones Finalizadas</h3>
+      </div>
+      <span id="count-col-finalizados" class="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-600 text-white">0</span>
+    </div>
+    <div id="list-col-finalizados" class="p-4 space-y-3.5"></div>
+  </div>
+</section>

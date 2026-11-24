@@ -22,6 +22,7 @@ class SoporteTIApp {
     this.usersList = [];
     this.currentUser = null;
     this.allRecords = [];
+    this.adminViewLoaded = false;
 
     this.activeTab = "general";
     this.selectedDate = getLocalDateString(0);
@@ -33,16 +34,52 @@ class SoporteTIApp {
 
     this.activeRecordForModal = null;
     this.selectedResolution = "Reparación en sede";
+  }
 
+  async init() {
+    await this.loadBaseViews();
     this.initStaticOptions();
     this.bindEvents();
     this.startLiveClock();
     this.connectDatabase();
   }
 
+  async loadBaseViews() {
+    const partials = [
+      { id: "container-general", url: "./views/general.html" },
+      { id: "container-recepcion", url: "./views/recepcion.html" },
+      { id: "container-soporte", url: "./views/soporte.html" },
+      { id: "container-historial", url: "./views/historial.html" },
+      { id: "container-modals", url: "./views/modals.html" }
+    ];
+
+    await Promise.all(
+      partials.map(async ({ id, url }) => {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`No se pudo cargar ${url}`);
+        document.getElementById(id).innerHTML = await res.text();
+      })
+    );
+
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  async ensureAdminViewLoaded() {
+    if (this.adminViewLoaded || this.currentUser?.rol !== "ADMIN") return;
+
+    const res = await fetch("./views/admin.html");
+    if (!res.ok) return;
+
+    document.getElementById("container-admin").innerHTML = await res.text();
+    this.adminViewLoaded = true;
+    this.bindAdminEvents();
+    if (window.lucide) window.lucide.createIcons();
+  }
+
   initStaticOptions() {
     const fillSelect = (id, items) => {
-      document.getElementById(id).innerHTML = items.map((val) => `<option value="${val}">${val}</option>`).join("");
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = items.map((val) => `<option value="${val}">${val}</option>`).join("");
     };
 
     fillSelect("rec-grado", GRADOS_ESCOLARES);
@@ -67,19 +104,21 @@ class SoporteTIApp {
       return emptyOpt + nombres.map((n) => `<option value="${n}">${n}</option>`).join("");
     };
 
-    document.getElementById("rec-tecnico-recepcion").innerHTML = buildOptions();
-    document.getElementById("rec-tecnico-ticket").innerHTML = buildOptions();
-    document.getElementById("grab-tech-select").innerHTML = buildOptions();
+    // En recepción: el que recepciona queda fijo al usuario con sesión activa
+    if (this.currentUser) {
+      document.getElementById("rec-tecnico-recepcion").value = this.currentUser.nombre;
+    }
+
+    const ticketSelect = document.getElementById("rec-tecnico-ticket");
+    ticketSelect.innerHTML = buildOptions();
+    if (this.currentUser && nombres.includes(this.currentUser.nombre)) {
+      ticketSelect.value = this.currentUser.nombre;
+    }
+
+    // Selectores exclusivos del modal de corrección de Admin
     document.getElementById("edit-rec-tec-rec").innerHTML = buildOptions();
     document.getElementById("edit-rec-tec-tkt").innerHTML = buildOptions();
     document.getElementById("edit-rec-tec-rep").innerHTML = buildOptions(true);
-
-    // Preseleccionar al usuario que inició sesión
-    if (this.currentUser && nombres.includes(this.currentUser.nombre)) {
-      document.getElementById("rec-tecnico-recepcion").value = this.currentUser.nombre;
-      document.getElementById("rec-tecnico-ticket").value = this.currentUser.nombre;
-      document.getElementById("grab-tech-select").value = this.currentUser.nombre;
-    }
   }
 
   connectDatabase() {
@@ -91,7 +130,6 @@ class SoporteTIApp {
 
     this.dbService.initAuth(
       () => {
-        // 1. Escuchar lista de usuarios autorizados
         this.dbService.subscribeUsers((users) => {
           this.usersList = users;
           loginStatus.textContent = `Conexión lista (${users.length} cuentas autorizadas)`;
@@ -103,7 +141,6 @@ class SoporteTIApp {
           if (this.currentUser) this.refreshUI();
         });
 
-        // 2. Escuchar registros de equipos
         this.dbService.subscribeRecords(
           (records) => {
             this.allRecords = records;
@@ -137,7 +174,7 @@ class SoporteTIApp {
     }
   }
 
-  applyLoggedInUser(userObj) {
+  async applyLoggedInUser(userObj) {
     this.currentUser = userObj;
     sessionStorage.setItem("soporte_ti_user", userObj.usuario);
 
@@ -148,9 +185,18 @@ class SoporteTIApp {
     document.getElementById("header-user-name").textContent = userObj.nombre;
     document.getElementById("header-user-role").textContent = userObj.rol;
 
-    // Mostrar pestaña oculta únicamente si es ADMIN
+    // Mostrar y cargar vista de Admin ÚNICAMENTE si el usuario tiene rol ADMIN
     const adminTab = document.getElementById("nav-tab-admin");
-    adminTab.classList.toggle("hidden", userObj.rol !== "ADMIN");
+    if (userObj.rol === "ADMIN") {
+      await this.ensureAdminViewLoaded();
+      adminTab.classList.remove("hidden");
+      adminTab.classList.add("inline-flex");
+    } else {
+      adminTab.classList.add("hidden");
+      adminTab.classList.remove("inline-flex");
+      document.getElementById("container-admin").innerHTML = "";
+      this.adminViewLoaded = false;
+    }
 
     this.syncPersonnelSelects();
     this.refreshUI();
@@ -160,6 +206,7 @@ class SoporteTIApp {
     this.currentUser = null;
     sessionStorage.removeItem("soporte_ti_user");
     document.getElementById("app-shell").classList.add("hidden");
+    document.getElementById("app-shell").classList.remove("flex");
     document.getElementById("login-screen").classList.remove("hidden");
     document.getElementById("login-password").value = "";
     this.switchTab("general");
@@ -168,7 +215,8 @@ class SoporteTIApp {
   startLiveClock() {
     setInterval(() => {
       if (!this.manualTimeEdited) {
-        document.getElementById("rec-hora").value = getCurrentTimeString();
+        const horaInput = document.getElementById("rec-hora");
+        if (horaInput) horaInput.value = getCurrentTimeString();
       }
       if (this.currentUser && (this.activeTab === "general" || this.activeTab === "soporte")) {
         this.refreshUI();
@@ -178,7 +226,7 @@ class SoporteTIApp {
 
   bindEvents() {
     // Login
-    document.getElementById("form-login").addEventListener("submit", (e) => {
+    document.getElementById("form-login").addEventListener("submit", async (e) => {
       e.preventDefault();
       const username = document.getElementById("login-username").value.trim().toLowerCase();
       const password = document.getElementById("login-password").value.trim();
@@ -189,13 +237,13 @@ class SoporteTIApp {
       );
 
       if (!matched) {
-        errBox.textContent = "Usuario o contraseña incorrectos. Verifica tus credenciales.";
+        errBox.textContent = "Usuario o contraseña incorrectos.";
         errBox.classList.remove("hidden");
         return;
       }
 
       errBox.classList.add("hidden");
-      this.applyLoggedInUser(matched);
+      await this.applyLoggedInUser(matched);
       this.toast.show(`Bienvenido, ${matched.nombre} (${matched.rol})`, "success");
     });
 
@@ -206,17 +254,13 @@ class SoporteTIApp {
       btn.addEventListener("click", () => this.switchTab(btn.dataset.tab));
     });
 
-    // Fecha diaria
+    // Control de fechas (Ayer, Hoy, Calendario)
     document.getElementById("btn-date-yesterday").addEventListener("click", () => {
       this.selectedDate = getLocalDateString(-1);
       this.refreshUI();
     });
     document.getElementById("btn-date-today").addEventListener("click", () => {
       this.selectedDate = getLocalDateString(0);
-      this.refreshUI();
-    });
-    document.getElementById("btn-date-tomorrow").addEventListener("click", () => {
-      this.selectedDate = getLocalDateString(1);
       this.refreshUI();
     });
     document.getElementById("input-selected-date").addEventListener("change", (e) => {
@@ -274,8 +318,9 @@ class SoporteTIApp {
       document.getElementById("rec-hora").value = getCurrentTimeString();
     });
     document.getElementById("btn-same-tech").addEventListener("click", () => {
-      document.getElementById("rec-tecnico-ticket").value =
-        document.getElementById("rec-tecnico-recepcion").value;
+      if (this.currentUser) {
+        document.getElementById("rec-tecnico-ticket").value = this.currentUser.nombre;
+      }
     });
 
     // Cargador Sí / No
@@ -347,13 +392,12 @@ class SoporteTIApp {
 
         const action = actionBtn.dataset.action;
         if (action === "detail") this.openDetailModal(record);
-        if (action === "grab") this.openGrabModal(record);
+        if (action === "grab") this.grabEquipmentDirectly(record);
         if (action === "finish") this.openFinishModal(record);
         if (action === "edit" && this.currentUser?.rol === "ADMIN") this.openEditRecordModal(record);
         if (action === "delete" && this.currentUser?.rol === "ADMIN") this.openDeleteModal(record);
       }
 
-      // Acciones de gestión de usuarios (Solo Admin)
       const userBtn = e.target.closest("[data-user-action]");
       if (userBtn && this.currentUser?.rol === "ADMIN") {
         const targetUser = this.usersList.find((u) => u.id === userBtn.dataset.uid);
@@ -381,48 +425,10 @@ class SoporteTIApp {
       }
     });
 
-    // Formulario Admin: Crear / Actualizar usuario
-    document.getElementById("form-admin-user").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      if (this.currentUser?.rol !== "ADMIN") return;
-
-      const userId = document.getElementById("admin-user-id").value;
-      const nombre = document.getElementById("admin-user-nombre").value.trim();
-      const rol = document.getElementById("admin-user-rol").value;
-      const usuario = document.getElementById("admin-user-username").value.trim().toLowerCase();
-      const password = document.getElementById("admin-user-password").value.trim();
-
-      const duplicate = this.usersList.find((u) => u.usuario.toLowerCase() === usuario && u.id !== userId);
-      if (duplicate) {
-        this.toast.show("Ese nombre de usuario ya existe. Elige otro.", "error");
-        return;
-      }
-
-      try {
-        if (userId) {
-          await this.dbService.updateUser(userId, { nombre, rol, usuario, password });
-          this.toast.show(`Usuario ${nombre} actualizado.`, "success");
-        } else {
-          await this.dbService.createUser({ nombre, rol, usuario, password, activo: true });
-          this.toast.show(`Usuario ${nombre} (${rol}) creado.`, "success");
-        }
-        this.resetAdminUserForm();
-      } catch (err) {
-        this.toast.show("Error al guardar usuario.", "error");
-      }
-    });
-
-    document.getElementById("btn-cancel-edit-user").addEventListener("click", () => this.resetAdminUserForm());
-
-    // Modal Edición de Registro (Solo Admin)
+    // Modales
     document.getElementById("btn-close-edit-record").addEventListener("click", () => this.closeModal("modal-edit-record"));
     document.getElementById("btn-cancel-edit-record").addEventListener("click", () => this.closeModal("modal-edit-record"));
     document.getElementById("form-edit-record").addEventListener("submit", (e) => this.confirmAdminEditRecord(e));
-
-    // Resto de modales
-    document.getElementById("btn-cancel-grab").addEventListener("click", () => this.closeModal("modal-grab"));
-    document.getElementById("btn-close-grab").addEventListener("click", () => this.closeModal("modal-grab"));
-    document.getElementById("btn-confirm-grab").addEventListener("click", () => this.confirmGrabEquipment());
 
     document.getElementById("btn-cancel-finish").addEventListener("click", () => this.closeModal("modal-finish"));
     document.getElementById("btn-close-finish").addEventListener("click", () => this.closeModal("modal-finish"));
@@ -459,6 +465,43 @@ class SoporteTIApp {
     });
   }
 
+  bindAdminEvents() {
+    const formAdmin = document.getElementById("form-admin-user");
+    if (!formAdmin) return;
+
+    formAdmin.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (this.currentUser?.rol !== "ADMIN") return;
+
+      const userId = document.getElementById("admin-user-id").value;
+      const nombre = document.getElementById("admin-user-nombre").value.trim();
+      const rol = document.getElementById("admin-user-rol").value;
+      const usuario = document.getElementById("admin-user-username").value.trim().toLowerCase();
+      const password = document.getElementById("admin-user-password").value.trim();
+
+      const duplicate = this.usersList.find((u) => u.usuario.toLowerCase() === usuario && u.id !== userId);
+      if (duplicate) {
+        this.toast.show("Ese nombre de usuario ya existe. Elige otro.", "error");
+        return;
+      }
+
+      try {
+        if (userId) {
+          await this.dbService.updateUser(userId, { nombre, rol, usuario, password });
+          this.toast.show(`Usuario ${nombre} actualizado.`, "success");
+        } else {
+          await this.dbService.createUser({ nombre, rol, usuario, password, activo: true });
+          this.toast.show(`Usuario ${nombre} (${rol}) creado.`, "success");
+        }
+        this.resetAdminUserForm();
+      } catch (err) {
+        this.toast.show("Error al guardar usuario.", "error");
+      }
+    });
+
+    document.getElementById("btn-cancel-edit-user").addEventListener("click", () => this.resetAdminUserForm());
+  }
+
   resetAdminUserForm() {
     document.getElementById("admin-user-id").value = "";
     document.getElementById("admin-user-nombre").value = "";
@@ -476,18 +519,19 @@ class SoporteTIApp {
     document.querySelectorAll(".nav-tab-btn").forEach((btn) => {
       const isSelected = btn.dataset.tab === tabName;
       if (btn.dataset.tab === "admin") {
-        btn.className = `nav-tab-btn flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition border border-amber-500/30 ${
+        btn.className = `nav-tab-btn inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition border border-amber-500/30 ${
           isSelected ? "bg-amber-500 text-slate-950 shadow-md" : "text-amber-300 hover:bg-slate-800"
         }`;
       } else {
-        btn.className = `nav-tab-btn flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition ${
+        btn.className = `nav-tab-btn inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition ${
           isSelected ? "bg-blue-600 text-white shadow-md" : "text-slate-300 hover:bg-slate-800 hover:text-white"
         }`;
       }
     });
 
     ["general", "recepcion", "soporte", "historial", "admin"].forEach((view) => {
-      document.getElementById(`view-${view}`).classList.toggle("hidden", view !== tabName);
+      const el = document.getElementById(`view-${view}`);
+      if (el) el.classList.toggle("hidden", view !== tabName);
     });
 
     document
@@ -558,10 +602,10 @@ class SoporteTIApp {
 
     this.ui.updateDailyHeader(this.selectedDate, filteredDaily.length, dailyRecords.length);
     this.ui.renderGeneralDashboard(this.selectedDate, dailyRecords, filteredDaily, this.dailySearchQuery, nowTimestamp, isAdmin);
-    this.ui.renderSupportBoard(this.selectedDate, filteredDaily, nowTimestamp);
+    this.ui.renderSupportBoard(this.selectedDate, filteredDaily, nowTimestamp, this.currentUser);
     this.ui.renderGlobalHistory(this.allRecords.length, this.getFilteredGlobalRecords(), isAdmin);
 
-    if (isAdmin) {
+    if (isAdmin && this.adminViewLoaded) {
       this.ui.renderAdminPanel(this.usersList, this.allRecords);
     }
 
@@ -596,7 +640,7 @@ class SoporteTIApp {
       grado: document.getElementById("rec-grado").value,
       danoReportado: document.getElementById("rec-dano").value.trim(),
       traeCargador: this.traeCargador,
-      tecnicoRecepcion: document.getElementById("rec-tecnico-recepcion").value,
+      tecnicoRecepcion: this.currentUser.nombre,
       tecnicoTicket: document.getElementById("rec-tecnico-ticket").value,
       creadoPorUsuario: this.currentUser.usuario,
       creadoPorNombre: this.currentUser.nombre,
@@ -620,7 +664,7 @@ class SoporteTIApp {
     try {
       await this.dbService.createRecord(newRecord);
       this.selectedDate = fecha;
-      this.toast.show(`Equipo serie ${serieEquipo} registrado exitosamente en espera.`, "success");
+      this.toast.show(`Equipo ${serieEquipo} recepcionado por ${this.currentUser.nombre}.`, "success");
 
       this.manualTimeEdited = false;
       document.getElementById("rec-hora").value = getCurrentTimeString();
@@ -633,28 +677,14 @@ class SoporteTIApp {
       document.getElementById("rec-dano").value = "";
       document.getElementById("rec-serie").focus();
     } catch (err) {
-      this.toast.show("Error al guardar en Firestore. Revisa tu conexión.", "error");
+      this.toast.show("Error al guardar en Firestore.", "error");
     }
   }
 
-  openGrabModal(record) {
-    this.activeRecordForModal = record;
-    if (this.currentUser) {
-      document.getElementById("grab-tech-select").value = this.currentUser.nombre;
-    }
-    document.getElementById("grab-info-box").innerHTML = `
-      <div class="flex justify-between"><span class="text-slate-500">Serie del equipo:</span> <strong class="font-mono">${record.serieEquipo}</strong></div>
-      <div class="flex justify-between"><span class="text-slate-500">Beneficiario:</span> <strong>${record.nombreBeneficiario}</strong></div>
-      <div class="flex justify-between"><span class="text-slate-500">Centro Educativo:</span> <strong>${record.codigoCE} - ${record.nombreCE}</strong></div>
-      <div class="pt-1 border-t border-slate-200 mt-1"><span class="text-slate-500">Daño: </span><strong class="text-amber-800">${record.danoReportado}</strong></div>
-    `;
-    document.getElementById("modal-grab").classList.remove("hidden");
-  }
-
-  async confirmGrabEquipment() {
-    if (!this.activeRecordForModal) return;
-    const record = this.activeRecordForModal;
-    const tech = document.getElementById("grab-tech-select").value;
+  // ASIGNACIÓN DIRECTA AL TÉCNICO CON SESIÓN ACTIVA (SIN DESPLEGABLES)
+  async grabEquipmentDirectly(record) {
+    if (!this.currentUser) return;
+    const tech = this.currentUser.nombre;
     const now = Date.now();
     const horaInicio = getCurrentTimeString();
     const baseRec = record.recepcionTimestamp || buildLocalTimestamp(record.fecha, record.horaRecepcion);
@@ -668,8 +698,7 @@ class SoporteTIApp {
         inicioReparacionTimestamp: now,
         tiempoEsperaMinutos: esperaMin
       });
-      this.toast.show(`Equipo ${record.serieEquipo} asignado a ${tech}.`, "info");
-      this.closeModal("modal-grab");
+      this.toast.show(`Equipo ${record.serieEquipo} asignado a ${tech} a las ${horaInicio}.`, "info");
     } catch (err) {
       this.toast.show("No se pudo asignar el equipo.", "error");
     }
@@ -728,7 +757,7 @@ class SoporteTIApp {
         finReparacionTimestamp: now,
         tiempoReparacionMinutos: reparacionMin
       });
-      this.toast.show(`Reparación finalizada (${this.selectedResolution}) para ${record.serieEquipo}.`, "success");
+      this.toast.show(`Solventado (${this.selectedResolution}) a las ${horaFin}.`, "success");
       this.closeModal("modal-finish");
     } catch (err) {
       this.toast.show("Error al guardar la finalización.", "error");
@@ -840,5 +869,6 @@ class SoporteTIApp {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-  new SoporteTIApp();
+  const app = new SoporteTIApp();
+  app.init();
 });
