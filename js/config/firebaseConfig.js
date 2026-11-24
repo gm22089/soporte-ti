@@ -2,13 +2,15 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+
+// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "TU_API_KEY",
+  apiKey: "AIzaSyB_MhMEMwQoHqFDDaptJsBUunbsfq2atLw",
   authDomain: "soporte-ti-c3841.firebaseapp.com",
   projectId: "soporte-ti-c3841",
-  storageBucket: "soporte-ti-c3841.appspot.com",
-  messagingSenderId: "000000000000",
-  appId: "1:000000000000:web:000000000000"
+  storageBucket: "soporte-ti-c3841.firebasestorage.app",
+  messagingSenderId: "126643277274",
+  appId: "1:126643277274:web:f2251216fa7ffbedc304e3"
 };
 
 const app = initializeApp(firebaseConfig);
