@@ -3,6 +3,7 @@ import {
   FALLAS_FRECUENTES,
   OPCIONES_RESOLUCION
 } from "./config/constants.js";
+import { CeCatalogService } from "./services/CeCatalogService.js";
 import {
   getLocalDateString,
   getCurrentTimeString,
@@ -16,12 +17,15 @@ import { UIRenderer } from "./ui/UIRenderer.js";
 class SoporteTIApp {
   constructor() {
     this.dbService = new FirestoreService();
+    this.ceService = new CeCatalogService();
     this.toast = new ToastManager();
     this.ui = new UIRenderer();
 
     this.usersList = [];
     this.currentUser = null;
-    this.allRecords = [];
+    this.dailyRecords = [];
+    this.allHistoricalRecords = [];
+    this.historicalListenerActive = false;
     this.adminViewLoaded = false;
 
     this.activeTab = "general";
@@ -36,14 +40,9 @@ class SoporteTIApp {
     this.selectedResolution = "Reparación en sede";
   }
 
-  // Helper seguro: nunca lanza TypeError si un elemento aún no existe en el DOM
   bind(id, event, handler) {
     const el = document.getElementById(id);
-    if (el) {
-      el.addEventListener(event, handler);
-    } else {
-      console.warn(`Elemento no encontrado en DOM: #${id}`);
-    }
+    if (el) el.addEventListener(event, handler);
   }
 
   async init() {
@@ -51,7 +50,41 @@ class SoporteTIApp {
     this.initStaticOptions();
     this.bindEvents();
     this.startLiveClock();
+    this.initCeCatalog();
     this.connectDatabase();
+  }
+
+  async initCeCatalog() {
+    const statusEl = document.getElementById("ce-catalog-status");
+    const list = await this.ceService.loadCatalog();
+    if (statusEl) {
+      if (list.length > 0) {
+        statusEl.textContent = `✓ ${list.length.toLocaleString()} CEs en caché`;
+        statusEl.className = "text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded";
+      } else {
+        statusEl.textContent = "Catálogo offline (ingreso manual disponible)";
+        statusEl.className = "text-[11px] font-semibold text-amber-700";
+      }
+    }
+  }
+
+  selectCentroEducativo(ce) {
+    const codEl = document.getElementById("rec-codigo-ce");
+    const nomEl = document.getElementById("rec-nombre-ce");
+    const searchEl = document.getElementById("rec-ce-autocomplete");
+    const dropdown = document.getElementById("ce-suggestions-dropdown");
+    const counter = document.getElementById("ce-digits-counter");
+
+    if (codEl) codEl.value = ce.codigo;
+    if (nomEl) nomEl.value = ce.nombre;
+    if (searchEl) searchEl.value = `${ce.codigo} — ${ce.nombre}`;
+    if (dropdown) dropdown.classList.add("hidden");
+    if (counter) {
+      counter.textContent = `${ce.codigo.length}/5`;
+      counter.className = "text-[11px] font-mono font-bold text-emerald-600";
+    }
+
+    document.getElementById("rec-id-beneficiario")?.focus();
   }
 
   async loadBaseViews() {
@@ -67,9 +100,8 @@ class SoporteTIApp {
       partials.map(async ({ id, url }) => {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`No se pudo cargar ${url} (${res.status})`);
-        const html = await res.text();
         const container = document.getElementById(id);
-        if (container) container.innerHTML = html;
+        if (container) container.innerHTML = await res.text();
       })
     );
 
@@ -86,6 +118,15 @@ class SoporteTIApp {
     this.adminViewLoaded = true;
     this.bindAdminEvents();
     if (window.lucide) window.lucide.createIcons();
+  }
+
+  ensureHistoricalLoaded() {
+    if (this.historicalListenerActive) return;
+    this.historicalListenerActive = true;
+    this.dbService.subscribeAllRecordsOnceOrLive((records) => {
+      this.allHistoricalRecords = records;
+      if (this.currentUser) this.refreshUI();
+    });
   }
 
   initStaticOptions() {
@@ -121,9 +162,7 @@ class SoporteTIApp {
     };
 
     const recInput = document.getElementById("rec-tecnico-recepcion");
-    if (this.currentUser && recInput) {
-      recInput.value = this.currentUser.nombre;
-    }
+    if (this.currentUser && recInput) recInput.value = this.currentUser.nombre;
 
     const ticketSelect = document.getElementById("rec-tecnico-ticket");
     if (ticketSelect) {
@@ -141,12 +180,31 @@ class SoporteTIApp {
     if (editRep) editRep.innerHTML = buildOptions(true);
   }
 
-  connectDatabase() {
-    const loginStatus = document.getElementById("login-status-msg");
-    const loginBtn = document.getElementById("btn-login-submit");
+  subscribeActiveDate() {
     const statusBadge = document.getElementById("db-status-badge");
     const errorBanner = document.getElementById("db-error-banner");
     const errorText = document.getElementById("db-error-text");
+
+    this.dbService.subscribeRecordsByDate(
+      this.selectedDate,
+      (records) => {
+        this.dailyRecords = records;
+        errorBanner.classList.add("hidden");
+        statusBadge.className =
+          "hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+        statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Firestore en vivo`;
+        if (this.currentUser) this.refreshUI();
+      },
+      (errMsg) => {
+        errorBanner.classList.remove("hidden");
+        errorText.textContent = errMsg;
+      }
+    );
+  }
+
+  connectDatabase() {
+    const loginStatus = document.getElementById("login-status-msg");
+    const loginBtn = document.getElementById("btn-login-submit");
 
     this.dbService.initAuth(
       () => {
@@ -161,20 +219,7 @@ class SoporteTIApp {
           if (this.currentUser) this.refreshUI();
         });
 
-        this.dbService.subscribeRecords(
-          (records) => {
-            this.allRecords = records;
-            errorBanner.classList.add("hidden");
-            statusBadge.className =
-              "hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
-            statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Firestore en vivo`;
-            if (this.currentUser) this.refreshUI();
-          },
-          (errMsg) => {
-            errorBanner.classList.remove("hidden");
-            errorText.textContent = errMsg;
-          }
-        );
+        this.subscribeActiveDate();
       },
       (authErr) => {
         loginStatus.textContent = authErr;
@@ -189,9 +234,7 @@ class SoporteTIApp {
     if (!savedUsername) return;
 
     const found = this.usersList.find((u) => u.usuario === savedUsername);
-    if (found) {
-      this.applyLoggedInUser(found);
-    }
+    if (found) this.applyLoggedInUser(found);
   }
 
   async applyLoggedInUser(userObj) {
@@ -208,6 +251,7 @@ class SoporteTIApp {
     const adminTab = document.getElementById("nav-tab-admin");
     if (userObj.rol === "ADMIN") {
       await this.ensureAdminViewLoaded();
+      this.ensureHistoricalLoaded();
       adminTab.classList.remove("hidden");
       adminTab.classList.add("inline-flex");
     } else {
@@ -243,6 +287,12 @@ class SoporteTIApp {
     }, 5000);
   }
 
+  changeSelectedDate(newDate) {
+    if (!newDate || newDate === this.selectedDate) return;
+    this.selectedDate = newDate;
+    this.subscribeActiveDate();
+  }
+
   bindEvents() {
     this.bind("form-login", "submit", async (e) => {
       e.preventDefault();
@@ -271,20 +321,9 @@ class SoporteTIApp {
       btn.addEventListener("click", () => this.switchTab(btn.dataset.tab));
     });
 
-    this.bind("btn-date-yesterday", "click", () => {
-      this.selectedDate = getLocalDateString(-1);
-      this.refreshUI();
-    });
-    this.bind("btn-date-today", "click", () => {
-      this.selectedDate = getLocalDateString(0);
-      this.refreshUI();
-    });
-    this.bind("input-selected-date", "change", (e) => {
-      if (e.target.value) {
-        this.selectedDate = e.target.value;
-        this.refreshUI();
-      }
-    });
+    this.bind("btn-date-yesterday", "click", () => this.changeSelectedDate(getLocalDateString(-1)));
+    this.bind("btn-date-today", "click", () => this.changeSelectedDate(getLocalDateString(0)));
+    this.bind("input-selected-date", "change", (e) => this.changeSelectedDate(e.target.value));
 
     this.bind("input-daily-search", "input", (e) => {
       this.dailySearchQuery = e.target.value;
@@ -294,37 +333,30 @@ class SoporteTIApp {
     });
     this.bind("btn-clear-daily-search", "click", () => {
       this.dailySearchQuery = "";
-      const dailyInput = document.getElementById("input-daily-search");
-      const clearBtn = document.getElementById("btn-clear-daily-search");
-      if (dailyInput) dailyInput.value = "";
-      if (clearBtn) clearBtn.classList.add("hidden");
+      document.getElementById("input-daily-search").value = "";
+      document.getElementById("btn-clear-daily-search").classList.add("hidden");
       this.refreshUI();
     });
 
     this.bind("btn-new-reception-date", "click", () => {
-      const recFecha = document.getElementById("rec-fecha");
-      if (recFecha) recFecha.value = this.selectedDate;
+      document.getElementById("rec-fecha").value = this.selectedDate;
       this.switchTab("recepcion");
     });
 
-    this.bind("btn-focus-scanner", "click", () => {
-      const scannerInput = document.getElementById("rec-serie");
-      if (scannerInput) scannerInput.focus();
-    });
+    // Escáner láser
+    this.bind("btn-focus-scanner", "click", () => document.getElementById("rec-serie")?.focus());
     this.bind("rec-serie", "keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        const scannerInput = e.target;
-        const cleaned = scannerInput.value.trim().toUpperCase();
+        const cleaned = e.target.value.trim().toUpperCase();
         if (cleaned) {
-          scannerInput.value = cleaned;
+          e.target.value = cleaned;
           const badge = document.getElementById("scan-flash-badge");
           if (badge) {
             badge.classList.remove("hidden");
             setTimeout(() => badge.classList.add("hidden"), 1800);
           }
-          const ceEl = document.getElementById("rec-codigo-ce");
-          if (ceEl) ceEl.focus();
+          document.getElementById("rec-ce-autocomplete")?.focus();
         }
       }
     });
@@ -345,16 +377,54 @@ class SoporteTIApp {
       }
     });
 
-    this.bind("btn-cargador-si", "click", () => {
-      this.traeCargador = true;
-      document.getElementById("btn-cargador-si").className = "py-2.5 px-3 rounded-xl text-sm font-bold border-2 flex items-center justify-center gap-1.5 transition bg-emerald-600 text-white border-emerald-600 shadow-sm";
-      document.getElementById("btn-cargador-no").className = "py-2.5 px-3 rounded-xl text-sm font-bold border-2 flex items-center justify-center gap-1.5 transition bg-white text-slate-600 border-slate-300 hover:bg-slate-50";
-    });
-    this.bind("btn-cargador-no", "click", () => {
-      this.traeCargador = false;
-      document.getElementById("btn-cargador-no").className = "py-2.5 px-3 rounded-xl text-sm font-bold border-2 flex items-center justify-center gap-1.5 transition bg-rose-600 text-white border-rose-600 shadow-sm";
-      document.getElementById("btn-cargador-si").className = "py-2.5 px-3 rounded-xl text-sm font-bold border-2 flex items-center justify-center gap-1.5 transition bg-white text-slate-600 border-slate-300 hover:bg-slate-50";
-    });
+    // AUTOCOMPLETADO DESDE CATÁLOGO OFICIAL EN CACHÉ
+    const ceSearchInput = document.getElementById("rec-ce-autocomplete");
+    const ceDropdown = document.getElementById("ce-suggestions-dropdown");
+    const ceClearBtn = document.getElementById("btn-clear-ce-search");
+
+    if (ceSearchInput && ceDropdown) {
+      ceSearchInput.addEventListener("input", (e) => {
+        const val = e.target.value;
+        if (ceClearBtn) ceClearBtn.classList.toggle("hidden", !val);
+
+        const matches = this.ceService.search(val);
+        if (matches.length === 0) {
+          ceDropdown.classList.add("hidden");
+          return;
+        }
+
+        ceDropdown.innerHTML = matches
+          .map(
+            (ce) => `
+            <button type="button" data-ce-code="${ce.codigo}" class="ce-suggestion-item w-full text-left px-4 py-2.5 hover:bg-indigo-50 transition flex items-start justify-between gap-3">
+              <div>
+                <span class="font-mono font-extrabold text-xs text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded mr-2">${ce.codigo}</span>
+                <span class="text-xs font-bold text-slate-900">${ce.nombre}</span>
+                ${ce.ubicacion ? `<span class="block text-[11px] text-slate-500 mt-0.5 ml-14">${ce.ubicacion}</span>` : ""}
+              </div>
+            </button>
+          `
+          )
+          .join("");
+        ceDropdown.classList.remove("hidden");
+      });
+
+      ceDropdown.addEventListener("click", (e) => {
+        const itemBtn = e.target.closest(".ce-suggestion-item");
+        if (!itemBtn) return;
+        const foundCE = this.ceService.catalog.find((c) => c.codigo === itemBtn.dataset.ceCode);
+        if (foundCE) this.selectCentroEducativo(foundCE);
+      });
+    }
+
+    if (ceClearBtn) {
+      ceClearBtn.addEventListener("click", () => {
+        ceSearchInput.value = "";
+        ceClearBtn.classList.add("hidden");
+        ceDropdown.classList.add("hidden");
+        ceSearchInput.focus();
+      });
+    }
 
     this.bind("rec-codigo-ce", "input", (e) => {
       const ceInput = e.target;
@@ -366,6 +436,23 @@ class SoporteTIApp {
           ceInput.value.length === 5 ? "text-emerald-600" : "text-slate-400"
         }`;
       }
+      if (ceInput.value.length === 5) {
+        const exactCE = this.ceService.catalog.find((c) => c.codigo === ceInput.value);
+        if (exactCE) {
+          document.getElementById("rec-nombre-ce").value = exactCE.nombre;
+        }
+      }
+    });
+
+    this.bind("btn-cargador-si", "click", () => {
+      this.traeCargador = true;
+      document.getElementById("btn-cargador-si").className = "py-2.5 px-3 rounded-xl text-sm font-bold border-2 flex items-center justify-center gap-1.5 transition bg-emerald-600 text-white border-emerald-600 shadow-sm";
+      document.getElementById("btn-cargador-no").className = "py-2.5 px-3 rounded-xl text-sm font-bold border-2 flex items-center justify-center gap-1.5 transition bg-white text-slate-600 border-slate-300 hover:bg-slate-50";
+    });
+    this.bind("btn-cargador-no", "click", () => {
+      this.traeCargador = false;
+      document.getElementById("btn-cargador-no").className = "py-2.5 px-3 rounded-xl text-sm font-bold border-2 flex items-center justify-center gap-1.5 transition bg-rose-600 text-white border-rose-600 shadow-sm";
+      document.getElementById("btn-cargador-si").className = "py-2.5 px-3 rounded-xl text-sm font-bold border-2 flex items-center justify-center gap-1.5 transition bg-white text-slate-600 border-slate-300 hover:bg-slate-50";
     });
 
     this.bind("btn-tipo-estudiante", "click", () => {
@@ -399,9 +486,15 @@ class SoporteTIApp {
     this.bind("form-recepcion", "submit", (e) => this.handleReceptionSubmit(e));
 
     document.addEventListener("click", (e) => {
+      if (ceDropdown && !e.target.closest("#rec-ce-autocomplete") && !e.target.closest("#ce-suggestions-dropdown")) {
+        ceDropdown.classList.add("hidden");
+      }
+
       const actionBtn = e.target.closest("[data-action]");
       if (actionBtn) {
-        const record = this.allRecords.find((r) => r.id === actionBtn.dataset.id);
+        const record =
+          this.dailyRecords.find((r) => r.id === actionBtn.dataset.id) ||
+          this.allHistoricalRecords.find((r) => r.id === actionBtn.dataset.id);
         if (!record) return;
 
         const action = actionBtn.dataset.action;
@@ -525,6 +618,11 @@ class SoporteTIApp {
     if (tabName === "admin" && this.currentUser?.rol !== "ADMIN") return;
     this.activeTab = tabName;
 
+    // Solo descarga historial completo si abren Historial Global o Panel Admin (ahorra lecturas)
+    if (tabName === "historial" || tabName === "admin") {
+      this.ensureHistoricalLoaded();
+    }
+
     document.querySelectorAll(".nav-tab-btn").forEach((btn) => {
       const isSelected = btn.dataset.tab === tabName;
       if (btn.dataset.tab === "admin") {
@@ -549,19 +647,17 @@ class SoporteTIApp {
     }
 
     if (tabName === "recepcion") {
-      setTimeout(() => {
-        const serieEl = document.getElementById("rec-serie");
-        if (serieEl) serieEl.focus();
-      }, 100);
+      setTimeout(() => document.getElementById("rec-serie")?.focus(), 100);
     }
     this.refreshUI();
   }
 
   getFilteredGlobalRecords() {
+    const sourceList = this.historicalListenerActive ? this.allHistoricalRecords : this.dailyRecords;
     const searchEl = document.getElementById("global-search");
-    if (!searchEl) return this.allRecords;
+    if (!searchEl) return sourceList;
 
-    const q = searchEl.value.trim().toLowerCase();
+    const q = searchEl.value.trim().toLowerCase().replace(/^#/, "");
     const dateFilter = document.getElementById("global-date").value;
     const statusFilter = document.getElementById("global-status").value;
     const resFilter = document.getElementById("global-resolution").value;
@@ -570,7 +666,7 @@ class SoporteTIApp {
     const clearBtn = document.getElementById("btn-clear-global-filters");
     if (clearBtn) clearBtn.classList.toggle("hidden", !hasFilters);
 
-    return this.allRecords
+    return sourceList
       .filter((item) => {
         if (dateFilter && item.fecha !== dateFilter) return false;
         if (statusFilter !== "TODOS" && item.estado !== statusFilter) return false;
@@ -578,6 +674,7 @@ class SoporteTIApp {
         if (!q) return true;
 
         return (
+          String(item.numeroDia || "") === q ||
           (item.serieEquipo || "").toLowerCase().includes(q) ||
           (item.identificacionBeneficiario || "").toLowerCase().includes(q) ||
           (item.nombreBeneficiario || "").toLowerCase().includes(q) ||
@@ -589,7 +686,7 @@ class SoporteTIApp {
       })
       .sort((a, b) => {
         if (a.fecha !== b.fecha) return (b.fecha || "").localeCompare(a.fecha || "");
-        return (b.recepcionTimestamp || 0) - (a.recepcionTimestamp || 0);
+        return (b.numeroDia || 0) - (a.numeroDia || 0);
       });
   }
 
@@ -597,15 +694,14 @@ class SoporteTIApp {
     const nowTimestamp = Date.now();
     const isAdmin = this.currentUser?.rol === "ADMIN";
 
-    const dailyRecords = this.allRecords
-      .filter((item) => item.fecha === this.selectedDate)
-      .sort((a, b) => (b.recepcionTimestamp || 0) - (a.recepcionTimestamp || 0));
+    const sortedDaily = [...this.dailyRecords].sort((a, b) => (b.numeroDia || 0) - (a.numeroDia || 0));
 
-    const q = this.dailySearchQuery.trim().toLowerCase();
+    const q = this.dailySearchQuery.trim().toLowerCase().replace(/^#/, "");
     const filteredDaily = !q
-      ? dailyRecords
-      : dailyRecords.filter(
+      ? sortedDaily
+      : sortedDaily.filter(
           (item) =>
+            String(item.numeroDia || "") === q ||
             (item.serieEquipo || "").toLowerCase().includes(q) ||
             (item.identificacionBeneficiario || "").toLowerCase().includes(q) ||
             (item.nombreBeneficiario || "").toLowerCase().includes(q) ||
@@ -617,13 +713,15 @@ class SoporteTIApp {
             (item.tecnicoReparacion || "").toLowerCase().includes(q)
         );
 
-    this.ui.updateDailyHeader(this.selectedDate, filteredDaily.length, dailyRecords.length);
-    this.ui.renderGeneralDashboard(this.selectedDate, dailyRecords, filteredDaily, this.dailySearchQuery, nowTimestamp, isAdmin);
+    this.ui.updateDailyHeader(this.selectedDate, filteredDaily.length, sortedDaily.length);
+    this.ui.renderGeneralDashboard(this.selectedDate, sortedDaily, filteredDaily, this.dailySearchQuery, nowTimestamp, isAdmin);
     this.ui.renderSupportBoard(this.selectedDate, filteredDaily, nowTimestamp, this.currentUser);
-    this.ui.renderGlobalHistory(this.allRecords.length, this.getFilteredGlobalRecords(), isAdmin);
+
+    const historyCount = this.historicalListenerActive ? this.allHistoricalRecords.length : sortedDaily.length;
+    this.ui.renderGlobalHistory(historyCount, this.getFilteredGlobalRecords(), isAdmin);
 
     if (isAdmin && this.adminViewLoaded) {
-      this.ui.renderAdminPanel(this.usersList, this.allRecords);
+      this.ui.renderAdminPanel(this.usersList, this.allHistoricalRecords);
     }
 
     if (window.lucide) window.lucide.createIcons();
@@ -638,6 +736,9 @@ class SoporteTIApp {
       this.toast.show("El Código del CE debe tener exactamente 5 dígitos numéricos.", "error");
       return;
     }
+
+    const submitBtn = document.getElementById("btn-submit-recepcion");
+    if (submitBtn) submitBtn.disabled = true;
 
     const fecha = document.getElementById("rec-fecha").value;
     const horaRecepcion = document.getElementById("rec-hora").value || getCurrentTimeString();
@@ -679,13 +780,23 @@ class SoporteTIApp {
     };
 
     try {
-      await this.dbService.createRecord(newRecord);
-      this.selectedDate = fecha;
-      this.toast.show(`Equipo ${serieEquipo} recepcionado por ${this.currentUser.nombre}.`, "success");
+      // Transacción atómica: obtiene el número único definitivo aunque haya 5 personas guardando a la vez
+      const { numeroDia } = await this.dbService.createRecordWithAtomicNumber(newRecord);
+      this.changeSelectedDate(fecha);
+
+      const banner = document.getElementById("last-ticket-banner");
+      if (banner) {
+        document.getElementById("last-ticket-badge").textContent = `#${numeroDia}`;
+        document.getElementById("last-ticket-text").textContent = `¡ETIQUETA #${numeroDia} ASIGNADA! — Equipo ${serieEquipo}`;
+        banner.classList.remove("hidden");
+      }
+
+      this.toast.show(`¡Etiqueta #${numeroDia} asignada al equipo ${serieEquipo}!`, "success");
 
       this.manualTimeEdited = false;
       document.getElementById("rec-hora").value = getCurrentTimeString();
       document.getElementById("rec-serie").value = "";
+      document.getElementById("rec-ce-autocomplete").value = "";
       document.getElementById("rec-id-beneficiario").value = "";
       document.getElementById("rec-nombre-beneficiario").value = "";
       document.getElementById("rec-celular").value = "";
@@ -694,7 +805,10 @@ class SoporteTIApp {
       document.getElementById("rec-dano").value = "";
       document.getElementById("rec-serie").focus();
     } catch (err) {
-      this.toast.show("Error al guardar en Firestore.", "error");
+      console.error(err);
+      this.toast.show("Error al guardar en Firestore. Verifica reglas de contadores_diarios.", "error");
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
     }
   }
 
@@ -714,7 +828,7 @@ class SoporteTIApp {
         inicioReparacionTimestamp: now,
         tiempoEsperaMinutos: esperaMin
       });
-      this.toast.show(`Equipo ${record.serieEquipo} asignado a ${tech} a las ${horaInicio}.`, "info");
+      this.toast.show(`Equipo #${record.numeroDia || ""} (${record.serieEquipo}) asignado a ${tech} a las ${horaInicio}.`, "info");
     } catch (err) {
       this.toast.show("No se pudo asignar el equipo.", "error");
     }
@@ -725,7 +839,7 @@ class SoporteTIApp {
     this.selectedResolution = "Reparación en sede";
     document.getElementById("finish-nota").value = "";
     document.getElementById("finish-info-box").innerHTML = `
-      <div><span class="text-slate-500 block">Equipo:</span><strong class="font-mono text-sm">${record.serieEquipo}</strong></div>
+      <div><span class="text-slate-500 block">Etiqueta / Serie:</span><strong class="font-mono text-sm">#${record.numeroDia || "—"} • ${record.serieEquipo}</strong></div>
       <div class="text-right"><span class="text-slate-500 block">Técnico Reparador:</span><strong class="text-blue-800">${record.tecnicoReparacion}</strong></div>
     `;
 
@@ -773,7 +887,7 @@ class SoporteTIApp {
         finReparacionTimestamp: now,
         tiempoReparacionMinutos: reparacionMin
       });
-      this.toast.show(`Solventado (${this.selectedResolution}) a las ${horaFin}.`, "success");
+      this.toast.show(`Equipo #${record.numeroDia || ""} solventado (${this.selectedResolution}) a las ${horaFin}.`, "success");
       this.closeModal("modal-finish");
     } catch (err) {
       this.toast.show("Error al guardar la finalización.", "error");
@@ -813,7 +927,7 @@ class SoporteTIApp {
     const oldRec = this.activeRecordForModal;
     const motivo = document.getElementById("edit-rec-motivo").value.trim();
 
-    const resumenAnterior = `Serie: ${oldRec.serieEquipo} | CE: ${oldRec.codigoCE} | Beneficiario: ${oldRec.nombreBeneficiario} (${oldRec.identificacionBeneficiario}) | Rec: ${oldRec.tecnicoRecepcion} | Estado: ${oldRec.estado}`;
+    const resumenAnterior = `#${oldRec.numeroDia || "—"} | Serie: ${oldRec.serieEquipo} | CE: ${oldRec.codigoCE} | Beneficiario: ${oldRec.nombreBeneficiario} (${oldRec.identificacionBeneficiario}) | Rec: ${oldRec.tecnicoRecepcion} | Estado: ${oldRec.estado}`;
 
     const nuevaCorreccion = {
       fechaHora: `${getLocalDateString(0)} ${getCurrentTimeString()}`,
@@ -863,7 +977,7 @@ class SoporteTIApp {
 
   openDeleteModal(record) {
     this.activeRecordForModal = record;
-    document.getElementById("delete-info-text").innerHTML = `Estás por eliminar el equipo serie <strong class="font-mono">${record.serieEquipo}</strong> perteneciente a <strong>${record.nombreBeneficiario}</strong> (${record.fecha}).`;
+    document.getElementById("delete-info-text").innerHTML = `Estás por eliminar el equipo <strong class="font-mono">#${record.numeroDia || "—"} (${record.serieEquipo})</strong> perteneciente a <strong>${record.nombreBeneficiario}</strong> (${record.fecha}).`;
     document.getElementById("modal-delete").classList.remove("hidden");
   }
 
@@ -871,7 +985,7 @@ class SoporteTIApp {
     if (!this.activeRecordForModal || this.currentUser?.rol !== "ADMIN") return;
     try {
       await this.dbService.deleteRecord(this.activeRecordForModal.id);
-      this.toast.show(`Registro ${this.activeRecordForModal.serieEquipo} eliminado.`, "success");
+      this.toast.show(`Registro #${this.activeRecordForModal.numeroDia || ""} eliminado.`, "success");
       this.closeModal("modal-delete");
     } catch (err) {
       this.toast.show("No se pudo eliminar el registro.", "error");

@@ -19,6 +19,9 @@ export const USUARIOS_INICIALES = [
   { nombre: "Fabricio Morales", usuario: "fmorales", password: "1234", rol: "TECNICO", activo: true }
 ];
 
+// Alias para compatibilidad con FirestoreService.js
+export const DEFAULT_USERS = USUARIOS_INICIALES;
+
 export const GRADOS_ESCOLARES = [
   "Parvularia",
   "1° Grado",

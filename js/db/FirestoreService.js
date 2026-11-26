@@ -1,102 +1,141 @@
-import { signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  signInAnonymously,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   collection,
+  doc,
   addDoc,
   updateDoc,
   deleteDoc,
-  doc,
-  onSnapshot
+  onSnapshot,
+  query,
+  where,
+  runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
 import { auth, db, COLLECTIONS } from "../config/firebaseConfig.js";
-import { USUARIOS_INICIALES } from "../config/constants.js";
+import { DEFAULT_USERS } from "../config/constants.js";
+
+const COUNTERS_COLLECTION = "contadores_diarios";
 
 export class FirestoreService {
   constructor() {
-    this.equiposCol = collection(db, COLLECTIONS.EQUIPOS);
-    this.usuariosCol = collection(db, COLLECTIONS.USUARIOS);
-    this.seededChecked = false;
+    this.auth = auth;
+    this.db = db;
+    this.recordsRef = collection(this.db, COLLECTIONS.EQUIPOS);
+    this.usersRef = collection(this.db, COLLECTIONS.USUARIOS);
+    this.unsubscribeDailyListener = null;
   }
 
-  async initAuth(onReady, onError) {
-    try {
-      await signInAnonymously(auth);
-    } catch (err) {
-      console.error("Error de autenticación:", err);
-      onError("No se pudo autenticar con Firebase. Verifica que el acceso Anónimo esté habilitado.");
-      return;
-    }
+  initAuth(onReadyCallback, onErrorCallback) {
+    onAuthStateChanged(this.auth, (user) => {
+      if (user) {
+        onReadyCallback(user);
+      }
+    });
 
-    onAuthStateChanged(auth, (user) => {
-      if (user) onReady(user);
+    signInAnonymously(this.auth).catch((err) => {
+      console.error("Error de autenticación Firebase:", err);
+      onErrorCallback("No se pudo iniciar sesión en Firebase. Verifica Authentication > Anónimo.");
     });
   }
 
-  // --- USUARIOS DEL SISTEMA (CON CACHÉ PERSISTENTE) ---
-  subscribeUsers(onData) {
-    return onSnapshot(this.usuariosCol, async (snapshot) => {
-      // Solo crea los usuarios iniciales si el servidor confirma que la colección está vacía
-      if (snapshot.empty && !snapshot.metadata.fromCache && !this.seededChecked) {
-        this.seededChecked = true;
-        for (const u of USUARIOS_INICIALES) {
-          await addDoc(this.usuariosCol, {
-            ...u,
-            createdAt: Date.now()
-          });
+  subscribeUsers(onUsersUpdate) {
+    return onSnapshot(this.usersRef, async (snapshot) => {
+      if (snapshot.empty) {
+        for (const u of DEFAULT_USERS) {
+          await addDoc(this.usersRef, u);
         }
         return;
       }
-
       const users = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      onData(users);
+      onUsersUpdate(users);
     });
   }
 
   async createUser(userData) {
-    return await addDoc(this.usuariosCol, {
-      ...userData,
-      createdAt: Date.now()
-    });
+    return await addDoc(this.usersRef, userData);
   }
 
   async updateUser(userId, updatedFields) {
-    const docRef = doc(db, COLLECTIONS.USUARIOS, userId);
-    return await updateDoc(docRef, updatedFields);
+    const ref = doc(this.db, COLLECTIONS.USUARIOS, userId);
+    return await updateDoc(ref, updatedFields);
   }
 
   async deleteUser(userId) {
-    const docRef = doc(db, COLLECTIONS.USUARIOS, userId);
-    return await deleteDoc(docRef);
+    const ref = doc(this.db, COLLECTIONS.USUARIOS, userId);
+    return await deleteDoc(ref);
   }
 
-  // --- REGISTROS DE EQUIPOS (SOLO TRAE NUEVOS O MODIFICADOS) ---
-  subscribeRecords(onData, onError) {
-    return onSnapshot(
-      this.equiposCol,
+  // Suscripción optimizada: solo escucha los equipos de la fecha activa (ahorra lecturas)
+  subscribeRecordsByDate(dateStr, onDataCallback, onErrorCallback) {
+    if (this.unsubscribeDailyListener) {
+      this.unsubscribeDailyListener();
+    }
+
+    const q = query(this.recordsRef, where("fecha", "==", dateStr));
+    this.unsubscribeDailyListener = onSnapshot(
+      q,
       (snapshot) => {
-        const records = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data()
-        }));
-        onData(records);
+        const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        onDataCallback(list);
       },
-      (error) => {
-        console.error("Error en sincronización Firestore:", error);
-        onError("Error de conexión con Firestore. Revisa tus reglas o señal de internet.");
+      (err) => {
+        console.error("Error Firestore onSnapshot:", err);
+        onErrorCallback("Error de permisos en Firestore. Revisa las reglas de seguridad.");
       }
     );
+
+    return this.unsubscribeDailyListener;
   }
 
-  async createRecord(recordData) {
-    return await addDoc(this.equiposCol, recordData);
+  // Consulta bajo demanda para el Historial Global (solo cuando se abre esa pestaña)
+  subscribeAllRecordsOnceOrLive(onDataCallback) {
+    return onSnapshot(this.recordsRef, (snapshot) => {
+      const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      onDataCallback(list);
+    });
   }
 
-  async updateRecord(recordId, updatedFields) {
-    const docRef = doc(db, COLLECTIONS.EQUIPOS, recordId);
+  // TRANSACCIÓN ATÓMICA: Garantiza correlativos únicos (#1, #2, #3...) aunque guarden 5 personas a la vez
+  async createRecordWithAtomicNumber(recordData) {
+    const counterDocRef = doc(this.db, COUNTERS_COLLECTION, recordData.fecha);
+    const newRecordRef = doc(this.recordsRef);
+
+    const assignedNumber = await runTransaction(this.db, async (transaction) => {
+      const counterSnap = await transaction.get(counterDocRef);
+      const currentCount = counterSnap.exists() ? Number(counterSnap.data().ultimoNumero) || 0 : 0;
+      const nextNumber = currentCount + 1;
+
+      transaction.set(
+        counterDocRef,
+        {
+          fecha: recordData.fecha,
+          ultimoNumero: nextNumber,
+          updatedAt: Date.now()
+        },
+        { merge: true }
+      );
+
+      transaction.set(newRecordRef, {
+        ...recordData,
+        numeroDia: nextNumber
+      });
+
+      return nextNumber;
+    });
+
+    return { id: newRecordRef.id, numeroDia: assignedNumber };
+  }
+
+  async updateRecord(id, updatedFields) {
+    const docRef = doc(this.db, COLLECTIONS.EQUIPOS, id);
     return await updateDoc(docRef, updatedFields);
   }
 
-  async deleteRecord(recordId) {
-    const docRef = doc(db, COLLECTIONS.EQUIPOS, recordId);
+  async deleteRecord(id) {
+    const docRef = doc(this.db, COLLECTIONS.EQUIPOS, id);
     return await deleteDoc(docRef);
   }
 }
