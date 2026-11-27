@@ -7,6 +7,17 @@ import {
 } from "../utils/dateUtils.js";
 
 export class UIRenderer {
+  renderTicketBadge(numeroDia, size = "md") {
+    const num = numeroDia ?? "—";
+    if (size === "lg") {
+      return `<span class="inline-flex items-center justify-center px-2.5 py-1 rounded-lg font-mono font-black text-sm bg-amber-400 text-slate-950 border border-amber-500 shadow-xs shrink-0" title="Número correlativo del día">#${num}</span>`;
+    }
+    if (size === "header") {
+      return `<span class="inline-flex items-center justify-center px-2 py-0.5 rounded font-mono font-black text-xs bg-amber-400 text-slate-950 shrink-0">#${num}</span>`;
+    }
+    return `<span class="inline-flex items-center justify-center px-2 py-0.5 rounded font-mono font-extrabold text-xs bg-amber-100 text-amber-950 border border-amber-300 shrink-0">#${num}</span>`;
+  }
+
   renderStatusBadge(estado) {
     if (estado === "En espera") {
       return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300">En espera</span>`;
@@ -121,8 +132,8 @@ export class UIRenderer {
           typeof item.tiempoEsperaMinutos === "number"
             ? item.tiempoEsperaMinutos
             : item.recepcionTimestamp
-            ? Math.max(0, Math.round((nowTimestamp - item.recepcionTimestamp) / 60000))
-            : 0;
+              ? Math.max(0, Math.round((nowTimestamp - item.recepcionTimestamp) / 60000))
+              : 0;
 
         const hasCorrections = Array.isArray(item.historialCorrecciones) && item.historialCorrecciones.length > 0;
 
@@ -137,7 +148,12 @@ export class UIRenderer {
 
         return `
           <tr class="hover:bg-slate-50/90 transition align-top ${hasCorrections ? "bg-amber-50/20" : ""}">
-            <td class="py-3 px-3.5 font-mono font-semibold text-slate-800 whitespace-nowrap">${item.horaRecepcion}</td>
+            <td class="py-3 px-3.5 whitespace-nowrap">
+              <div class="flex items-center gap-1.5">
+                ${this.renderTicketBadge(item.numeroDia, "sm")}
+                <span class="font-mono font-semibold text-slate-800">${item.horaRecepcion}</span>
+              </div>
+            </td>
             <td class="py-3 px-3.5 whitespace-nowrap">
               <span class="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-1 rounded border border-slate-300">${item.serieEquipo}</span>
               ${hasCorrections ? `<span class="block mt-1 text-[10px] font-bold text-amber-700">✎ Corregido (${item.historialCorrecciones.length})</span>` : ""}
@@ -162,11 +178,10 @@ export class UIRenderer {
             </td>
             <td class="py-3 px-3.5 min-w-[160px]">
               <p class="text-slate-800 font-medium">${item.danoReportado}</p>
-              <span class="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded text-[11px] font-semibold ${
-                item.traeCargador
-                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                  : "bg-rose-50 text-rose-700 border border-rose-200"
-              }">
+              <span class="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded text-[11px] font-semibold ${item.traeCargador
+            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+            : "bg-rose-50 text-rose-700 border border-rose-200"
+          }">
                 ${item.traeCargador ? "Con cargador" : "Sin cargador"}
               </span>
             </td>
@@ -175,13 +190,12 @@ export class UIRenderer {
               <div class="mt-0.5"><span class="text-slate-400">Ticket:</span> <span class="font-medium text-slate-700">${item.tecnicoTicket}</span></div>
             </td>
             <td class="py-3 px-3.5 min-w-[175px]">
-              ${
-                item.tecnicoReparacion
-                  ? `<div class="font-bold text-blue-800">${item.tecnicoReparacion}</div>
+              ${item.tecnicoReparacion
+            ? `<div class="font-bold text-blue-800">${item.tecnicoReparacion}</div>
                      <div class="text-[11px] text-slate-600 font-mono mt-0.5">Agarró: ${item.horaInicioReparacion || "—"}</div>
                      <div class="text-[11px] text-emerald-700 font-mono">Solventó: ${item.horaFinalizacionProceso || "En curso"}</div>`
-                  : `<span class="text-slate-400 italic">Sin técnico asignado</span>`
-              }
+            : `<span class="text-slate-400 italic">Sin técnico asignado</span>`
+          }
             </td>
             <td class="py-3 px-3.5 whitespace-nowrap">
               <span class="font-bold ${item.estado === "En espera" ? "text-amber-700" : "text-slate-700"}">${formatDurationMinutes(waitMinutes)}</span>
@@ -203,9 +217,18 @@ export class UIRenderer {
   }
 
   renderSupportBoard(selectedDate, filteredDailyRecords, nowTimestamp, currentUser) {
-    const esperaList = filteredDailyRecords.filter((r) => r.estado === "En espera");
-    const repList = filteredDailyRecords.filter((r) => r.estado === "En reparación");
-    const finList = filteredDailyRecords.filter((r) => r.estado === "Finalizado");
+    // Ordenar En Espera del #1 en adelante (FIFO: el primero que entró se atiende primero)
+    const esperaList = filteredDailyRecords
+      .filter((r) => r.estado === "En espera")
+      .sort((a, b) => (a.numeroDia || 0) - (b.numeroDia || 0));
+
+    const repList = filteredDailyRecords
+      .filter((r) => r.estado === "En reparación")
+      .sort((a, b) => (a.numeroDia || 0) - (b.numeroDia || 0));
+
+    const finList = filteredDailyRecords
+      .filter((r) => r.estado === "Finalizado")
+      .sort((a, b) => (b.numeroDia || 0) - (a.numeroDia || 0));
 
     document.getElementById("count-col-espera").textContent = esperaList.length;
     document.getElementById("count-col-reparacion").textContent = repList.length;
@@ -213,20 +236,23 @@ export class UIRenderer {
 
     const currentUserName = currentUser ? currentUser.nombre : "Técnico";
 
-    // COLUMNA 1: EN ESPERA (Al dar clic, asigna automáticamente al usuario logueado)
+    // COLUMNA 1: EN ESPERA DE TÉCNICO (Con número correlativo destacado)
     const colEspera = document.getElementById("list-col-espera");
     colEspera.innerHTML =
       esperaList.length === 0
         ? `<div class="text-center py-8 px-4 text-slate-400 text-xs">No hay equipos en espera para ${selectedDate}.</div>`
         : esperaList
-            .map((item) => {
-              const baseRec = item.recepcionTimestamp || buildLocalTimestamp(item.fecha, item.horaRecepcion);
-              const liveWaitMin = Math.max(0, Math.round((nowTimestamp - baseRec) / 60000));
-              return `
+          .map((item) => {
+            const baseRec = item.recepcionTimestamp || buildLocalTimestamp(item.fecha, item.horaRecepcion);
+            const liveWaitMin = Math.max(0, Math.round((nowTimestamp - baseRec) / 60000));
+            return `
                 <div class="p-4 rounded-xl border border-amber-200 bg-amber-50/30 hover:border-amber-400 transition space-y-3">
                   <div class="flex items-start justify-between gap-2">
                     <div>
-                      <span class="font-mono font-extrabold text-sm text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-300">${item.serieEquipo}</span>
+                      <div class="flex items-center gap-2 flex-wrap">
+                        ${this.renderTicketBadge(item.numeroDia, "lg")}
+                        <span class="font-mono font-extrabold text-sm text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-300">${item.serieEquipo}</span>
+                      </div>
                       <p class="text-xs font-bold text-slate-800 mt-2">${item.nombreBeneficiario}</p>
                       <p class="text-[11px] text-slate-500">CE ${item.codigoCE} — ${item.nombreCE}</p>
                     </div>
@@ -248,33 +274,37 @@ export class UIRenderer {
                   </div>
                   <button type="button" data-action="grab" data-id="${item.id}" class="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-sm flex items-center justify-center gap-2 transition">
                     <i data-lucide="play" class="w-4 h-4 pointer-events-none"></i>
-                    Agarrar Equipo (${currentUserName})
+                    Agarrar Equipo #${item.numeroDia || "—"} (${currentUserName})
                   </button>
                 </div>
               `;
-            })
-            .join("");
+          })
+          .join("");
 
-    // COLUMNA 2: EN REPARACIÓN (Muestra hora exacta en que agarró el equipo)
+    // COLUMNA 2: EN REPARACIÓN (Con número correlativo en cabecera y junto a la serie)
     const colRep = document.getElementById("list-col-reparacion");
     colRep.innerHTML =
       repList.length === 0
         ? `<div class="text-center py-8 px-4 text-slate-400 text-xs">No hay equipos reparándose actualmente en ${selectedDate}.</div>`
         : repList
-            .map((item) => {
-              const baseIni = item.inicioReparacionTimestamp || nowTimestamp;
-              const liveRepairMin = Math.max(0, Math.round((nowTimestamp - baseIni) / 60000));
-              return `
+          .map((item) => {
+            const baseIni = item.inicioReparacionTimestamp || nowTimestamp;
+            const liveRepairMin = Math.max(0, Math.round((nowTimestamp - baseIni) / 60000));
+            return `
                 <div class="p-4 rounded-xl border-2 border-blue-300 bg-blue-50/30 space-y-3">
-                  <div class="flex items-center justify-between bg-blue-900 text-white px-3 py-2 rounded-lg">
-                    <span class="text-xs font-bold flex items-center gap-1.5">
-                      <i data-lucide="user-check" class="w-3.5 h-3.5 text-sky-300"></i>
-                      ${item.tecnicoReparacion}
+                  <div class="flex items-center justify-between gap-2 bg-blue-900 text-white px-3 py-2 rounded-lg">
+                    <span class="text-xs font-bold flex items-center gap-1.5 truncate">
+                      ${this.renderTicketBadge(item.numeroDia, "header")}
+                      <i data-lucide="user-check" class="w-3.5 h-3.5 text-sky-300 shrink-0"></i>
+                      <span class="truncate">${item.tecnicoReparacion}</span>
                     </span>
-                    <span class="text-[11px] font-mono bg-blue-800 px-2 py-0.5 rounded">Agarró: ${item.horaInicioReparacion}</span>
+                    <span class="text-[11px] font-mono bg-blue-800 px-2 py-0.5 rounded shrink-0">Agarró: ${item.horaInicioReparacion}</span>
                   </div>
                   <div>
-                    <span class="font-mono font-extrabold text-sm text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-300">${item.serieEquipo}</span>
+                    <div class="flex items-center gap-2 flex-wrap">
+                      ${this.renderTicketBadge(item.numeroDia, "lg")}
+                      <span class="font-mono font-extrabold text-sm text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-300">${item.serieEquipo}</span>
+                    </div>
                     <p class="text-xs font-bold text-slate-800 mt-2">${item.nombreBeneficiario}</p>
                     <p class="text-[11px] text-slate-500">CE ${item.codigoCE} — ${item.nombreCE}</p>
                   </div>
@@ -293,24 +323,27 @@ export class UIRenderer {
                   </div>
                   <button type="button" data-action="finish" data-id="${item.id}" class="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center justify-center gap-2 transition">
                     <i data-lucide="check-square" class="w-4 h-4 pointer-events-none"></i>
-                    Solventar / Finalizar Proceso
+                    Solventar / Finalizar #${item.numeroDia || "—"}
                   </button>
                 </div>
               `;
-            })
-            .join("");
+          })
+          .join("");
 
-    // COLUMNA 3: FINALIZADOS (Muestra hora recepción, hora agarrado y hora solventado)
+    // COLUMNA 3: REPARACIONES FINALIZADAS (Con número correlativo destacado)
     const colFin = document.getElementById("list-col-finalizados");
     colFin.innerHTML =
       finList.length === 0
         ? `<div class="text-center py-8 px-4 text-slate-400 text-xs">Aún no hay equipos finalizados en ${selectedDate}.</div>`
         : finList
-            .map(
-              (item) => `
+          .map(
+            (item) => `
               <div class="p-4 rounded-xl border border-emerald-200 bg-emerald-50/25 space-y-2.5">
                 <div class="flex items-center justify-between gap-2">
-                  <span class="font-mono font-extrabold text-xs text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-300">${item.serieEquipo}</span>
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    ${this.renderTicketBadge(item.numeroDia, "lg")}
+                    <span class="font-mono font-extrabold text-xs text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-300">${item.serieEquipo}</span>
+                  </div>
                   ${this.renderResolutionBadge(item.resolucion)}
                 </div>
                 <div>
@@ -337,8 +370,8 @@ export class UIRenderer {
                 </div>
               </div>
             `
-            )
-            .join("");
+          )
+          .join("");
   }
 
   renderGlobalHistory(allCount, filteredGlobalRecords, isAdmin) {
@@ -354,15 +387,23 @@ export class UIRenderer {
     tbody.innerHTML = filteredGlobalRecords
       .map((item) => {
         const adminEditBtn = isAdmin
-          ? `<button type="button" data-action="edit" data-id="${item.id}" class="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50" title="Corregir (Admin)">
+          ? `<button type="button" data-action="edit" data-id="${item.id}" class="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50" title="Modificar (Admin)">
                <i data-lucide="edit-3" class="w-4 h-4 pointer-events-none"></i>
+             </button>
+             <button type="button" data-action="delete" data-id="${item.id}" class="p-1.5 rounded-lg text-slate-500 hover:text-red-700 hover:bg-red-50" title="Eliminar (Admin)">
+               <i data-lucide="trash-2" class="w-4 h-4 pointer-events-none"></i>
              </button>`
           : "";
 
         return `
           <tr class="hover:bg-slate-50 transition">
             <td class="py-3 px-3.5 font-mono font-bold text-slate-800 whitespace-nowrap">${item.fecha}</td>
-            <td class="py-3 px-3.5 font-mono text-slate-600 whitespace-nowrap">${item.horaRecepcion}</td>
+            <td class="py-3 px-3.5 whitespace-nowrap">
+              <div class="flex items-center gap-1.5">
+                ${this.renderTicketBadge(item.numeroDia, "sm")}
+                <span class="font-mono text-slate-600">${item.horaRecepcion}</span>
+              </div>
+            </td>
             <td class="py-3 px-3.5 font-mono font-bold text-slate-900 whitespace-nowrap">${item.serieEquipo}</td>
             <td class="py-3 px-3.5"><span class="font-mono font-bold text-blue-700 mr-1">${item.codigoCE}</span><span>${item.nombreCE}</span></td>
             <td class="py-3 px-3.5">
@@ -435,7 +476,7 @@ export class UIRenderer {
         return `
           <tr class="hover:bg-amber-50/40">
             <td class="py-3 px-4 font-mono font-bold">${r.fecha}</td>
-            <td class="py-3 px-4 font-mono font-bold text-slate-900">${r.serieEquipo}</td>
+            <td class="py-3 px-4 font-mono font-bold text-slate-900">#${r.numeroDia || "—"} • ${r.serieEquipo}</td>
             <td class="py-3 px-4">
               <div>Cuenta: <strong>${r.creadoPorNombre || r.tecnicoRecepcion}</strong></div>
               <div class="text-[11px] text-slate-500">Rec: ${r.tecnicoRecepcion} / Tkt: ${r.tecnicoTicket}</div>
@@ -457,15 +498,15 @@ export class UIRenderer {
   }
 
   renderDetailModal(item) {
-    document.getElementById("detail-serie-title").textContent = `Serie: ${item.serieEquipo}`;
+    document.getElementById("detail-serie-title").textContent = `Etiqueta #${item.numeroDia || "—"} • Serie: ${item.serieEquipo}`;
 
     const correctionsHtml =
       Array.isArray(item.historialCorrecciones) && item.historialCorrecciones.length > 0
         ? `<div class="p-4 rounded-xl bg-amber-50 border border-amber-300 space-y-2">
              <h4 class="font-bold uppercase text-[11px] text-amber-900">Constancia de Correcciones Administrativas</h4>
              ${item.historialCorrecciones
-               .map(
-                 (c) => `
+          .map(
+            (c) => `
                  <div class="bg-white p-2.5 rounded-lg border border-amber-200 text-[11px]">
                    <div class="flex justify-between font-bold text-amber-950">
                      <span>Corregido por: ${c.adminNombre}</span>
@@ -475,14 +516,15 @@ export class UIRenderer {
                    <p class="mt-0.5 text-slate-500"><strong>Datos anteriores:</strong> ${c.resumenAnterior}</p>
                  </div>
                `
-               )
-               .join("")}
+          )
+          .join("")}
            </div>`
         : "";
 
     document.getElementById("detail-content").innerHTML = `
       <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
         <div class="flex items-center gap-2">
+          ${this.renderTicketBadge(item.numeroDia, "lg")}
           ${this.renderStatusBadge(item.estado)}
           ${this.renderResolutionBadge(item.resolucion)}
         </div>

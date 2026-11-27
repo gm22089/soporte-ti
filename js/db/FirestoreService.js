@@ -8,6 +8,8 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  getDocs,
+  setDoc,
   onSnapshot,
   query,
   where,
@@ -68,7 +70,6 @@ export class FirestoreService {
     return await deleteDoc(ref);
   }
 
-  // Suscripción optimizada: solo escucha los equipos de la fecha activa (ahorra lecturas)
   subscribeRecordsByDate(dateStr, onDataCallback, onErrorCallback) {
     if (this.unsubscribeDailyListener) {
       this.unsubscribeDailyListener();
@@ -90,7 +91,6 @@ export class FirestoreService {
     return this.unsubscribeDailyListener;
   }
 
-  // Consulta bajo demanda para el Historial Global (solo cuando se abre esa pestaña)
   subscribeAllRecordsOnceOrLive(onDataCallback) {
     return onSnapshot(this.recordsRef, (snapshot) => {
       const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -98,7 +98,7 @@ export class FirestoreService {
     });
   }
 
-  // TRANSACCIÓN ATÓMICA: Garantiza correlativos únicos (#1, #2, #3...) aunque guarden 5 personas a la vez
+  // TRANSACCIÓN ATÓMICA: Garantiza correlativos únicos (#1, #2, #3...)
   async createRecordWithAtomicNumber(recordData) {
     const counterDocRef = doc(this.db, COUNTERS_COLLECTION, recordData.fecha);
     const newRecordRef = doc(this.recordsRef);
@@ -134,8 +134,30 @@ export class FirestoreService {
     return await updateDoc(docRef, updatedFields);
   }
 
-  async deleteRecord(id) {
+  // Elimina el registro y reinicia el contador SOLO si la fecha queda en 0 registros
+  async deleteRecord(id, fecha) {
     const docRef = doc(this.db, COLLECTIONS.EQUIPOS, id);
-    return await deleteDoc(docRef);
+    await deleteDoc(docRef);
+
+    if (fecha) {
+      const q = query(this.recordsRef, where("fecha", "==", fecha));
+      const remainingSnap = await getDocs(q);
+
+      if (remainingSnap.empty) {
+        const counterDocRef = doc(this.db, COUNTERS_COLLECTION, fecha);
+        await setDoc(
+          counterDocRef,
+          {
+            fecha,
+            ultimoNumero: 0,
+            updatedAt: Date.now()
+          },
+          { merge: true }
+        );
+        return { counterReset: true };
+      }
+    }
+
+    return { counterReset: false };
   }
 }

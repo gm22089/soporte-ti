@@ -49,6 +49,7 @@ class SoporteTIApp {
     await this.loadBaseViews();
     this.initStaticOptions();
     this.bindEvents();
+    this.setupInputValidations();
     this.startLiveClock();
     this.initCeCatalog();
     this.connectDatabase();
@@ -293,6 +294,60 @@ class SoporteTIApp {
     this.subscribeActiveDate();
   }
 
+  setupInputValidations() {
+    const enforceOnlyLetters = (id) => {
+      this.bind(id, "input", (e) => {
+        e.target.value = e.target.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'.-]/g, "");
+      });
+    };
+
+    enforceOnlyLetters("rec-nombre-beneficiario");
+    enforceOnlyLetters("rec-nombre-responsable");
+    enforceOnlyLetters("edit-rec-nombre-ben");
+    enforceOnlyLetters("edit-rec-nombre-resp");
+
+    const formatDUI = (val) => {
+      const digits = val.replace(/\D/g, "").slice(0, 9);
+      return digits.length > 8 ? `${digits.slice(0, 8)}-${digits.slice(8)}` : digits;
+    };
+
+    this.bind("rec-dui-responsable", "input", (e) => {
+      e.target.value = formatDUI(e.target.value);
+    });
+    this.bind("edit-rec-dui-resp", "input", (e) => {
+      e.target.value = formatDUI(e.target.value);
+    });
+
+    this.bind("rec-id-beneficiario", "input", (e) => {
+      if (this.tipoBeneficiario === "Docente") {
+        e.target.value = formatDUI(e.target.value);
+      } else {
+        e.target.value = e.target.value.replace(/\D/g, "").slice(0, 12);
+      }
+    });
+
+    this.bind("edit-rec-id-ben", "input", (e) => {
+      const tipo = document.getElementById("edit-rec-tipo-ben")?.value;
+      if (tipo === "Docente") {
+        e.target.value = formatDUI(e.target.value);
+      } else {
+        e.target.value = e.target.value.replace(/\D/g, "").slice(0, 12);
+      }
+    });
+
+    const formatPhone = (val) => {
+      const digits = val.replace(/\D/g, "").slice(0, 8);
+      return digits.length > 4 ? `${digits.slice(0, 4)}-${digits.slice(4)}` : digits;
+    };
+
+    this.bind("rec-celular", "input", (e) => {
+      e.target.value = formatPhone(e.target.value);
+    });
+    this.bind("edit-rec-celular", "input", (e) => {
+      e.target.value = formatPhone(e.target.value);
+    });
+  }
+
   bindEvents() {
     this.bind("form-login", "submit", async (e) => {
       e.preventDefault();
@@ -343,7 +398,6 @@ class SoporteTIApp {
       this.switchTab("recepcion");
     });
 
-    // Escáner láser
     this.bind("btn-focus-scanner", "click", () => document.getElementById("rec-serie")?.focus());
     this.bind("rec-serie", "keydown", (e) => {
       if (e.key === "Enter") {
@@ -377,7 +431,6 @@ class SoporteTIApp {
       }
     });
 
-    // AUTOCOMPLETADO DESDE CATÁLOGO OFICIAL EN CACHÉ
     const ceSearchInput = document.getElementById("rec-ce-autocomplete");
     const ceDropdown = document.getElementById("ce-suggestions-dropdown");
     const ceClearBtn = document.getElementById("btn-clear-ce-search");
@@ -461,6 +514,7 @@ class SoporteTIApp {
       document.getElementById("btn-tipo-docente").className = "px-4 py-2 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900";
       document.getElementById("label-id-beneficiario").textContent = "NIE del estudiante *";
       document.getElementById("label-nombre-beneficiario").textContent = "Nombre del estudiante *";
+      document.getElementById("rec-id-beneficiario").value = "";
       document.getElementById("rec-grado").value = "1° Grado";
     });
     this.bind("btn-tipo-docente", "click", () => {
@@ -469,6 +523,7 @@ class SoporteTIApp {
       document.getElementById("btn-tipo-estudiante").className = "px-4 py-2 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900";
       document.getElementById("label-id-beneficiario").textContent = "DUI del docente *";
       document.getElementById("label-nombre-beneficiario").textContent = "Nombre del docente *";
+      document.getElementById("rec-id-beneficiario").value = "";
       document.getElementById("rec-grado").value = "Docente / No aplica";
     });
 
@@ -618,7 +673,6 @@ class SoporteTIApp {
     if (tabName === "admin" && this.currentUser?.rol !== "ADMIN") return;
     this.activeTab = tabName;
 
-    // Solo descarga historial completo si abren Historial Global o Panel Admin (ahorra lecturas)
     if (tabName === "historial" || tabName === "admin") {
       this.ensureHistoricalLoaded();
     }
@@ -780,7 +834,6 @@ class SoporteTIApp {
     };
 
     try {
-      // Transacción atómica: obtiene el número único definitivo aunque haya 5 personas guardando a la vez
       const { numeroDia } = await this.dbService.createRecordWithAtomicNumber(newRecord);
       this.changeSelectedDate(fecha);
 
@@ -925,7 +978,8 @@ class SoporteTIApp {
     if (!this.activeRecordForModal || this.currentUser?.rol !== "ADMIN") return;
 
     const oldRec = this.activeRecordForModal;
-    const motivo = document.getElementById("edit-rec-motivo").value.trim();
+    const motivoInput = document.getElementById("edit-rec-motivo").value.trim();
+    const motivo = motivoInput || "Modificación administrativa directa";
 
     const resumenAnterior = `#${oldRec.numeroDia || "—"} | Serie: ${oldRec.serieEquipo} | CE: ${oldRec.codigoCE} | Beneficiario: ${oldRec.nombreBeneficiario} (${oldRec.identificacionBeneficiario}) | Rec: ${oldRec.tecnicoRecepcion} | Estado: ${oldRec.estado}`;
 
@@ -963,10 +1017,10 @@ class SoporteTIApp {
 
     try {
       await this.dbService.updateRecord(oldRec.id, updatedFields);
-      this.toast.show("Registro corregido y guardado en bitácora de auditoría.", "success");
+      this.toast.show("Registro actualizado correctamente.", "success");
       this.closeModal("modal-edit-record");
     } catch (err) {
-      this.toast.show("Error al guardar la corrección.", "error");
+      this.toast.show("Error al guardar la modificación.", "error");
     }
   }
 
@@ -983,9 +1037,15 @@ class SoporteTIApp {
 
   async confirmDeleteRecord() {
     if (!this.activeRecordForModal || this.currentUser?.rol !== "ADMIN") return;
+    const recordToDelete = this.activeRecordForModal;
+
     try {
-      await this.dbService.deleteRecord(this.activeRecordForModal.id);
-      this.toast.show(`Registro #${this.activeRecordForModal.numeroDia || ""} eliminado.`, "success");
+      const { counterReset } = await this.dbService.deleteRecord(recordToDelete.id, recordToDelete.fecha);
+      const msg = counterReset
+        ? `Registro #${recordToDelete.numeroDia || ""} eliminado. La fecha quedó vacía y el correlativo volvió a #1.`
+        : `Registro #${recordToDelete.numeroDia || ""} eliminado (los correlativos existentes se mantienen).`;
+
+      this.toast.show(msg, "success");
       this.closeModal("modal-delete");
     } catch (err) {
       this.toast.show("No se pudo eliminar el registro.", "error");
